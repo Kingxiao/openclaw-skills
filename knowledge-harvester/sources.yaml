@@ -1,5 +1,5 @@
 # ============================================
-# OpenClaw Knowledge Harvester v2.2 — 信息源配置
+# OpenClaw Knowledge Harvester v2.3 — 信息源配置
 # ============================================
 # type: 对应 scripts/adapters/ 下的 adapter 模块名
 #   rss             → adapters/rss.py (通用 RSS/Atom)
@@ -7,19 +7,18 @@
 #   github_trending → adapters/github_trending.py (RSS + scrape 降级)
 #   fred_api        → adapters/fred_api.py (FRED 经济数据)
 #   web_scrape      → adapters/web_scrape.py (通用 HTML scrape)
+#   ghost_api       → adapters/ghost_api.py (Ghost CMS Content API)
 #
-# phase: 1=MVP(立即上线), 2=运行1周后, 3=运行1月后
+# enabled: false 可禁用某个源（默认 true）
 # auto_discovered: true 标记由 discover_source.py 自动添加的源
-# 最后更新: 2026-03-11
+# 最后更新: 2026-03-12
 
 daily_sources:
-  # ── Phase 1 (MVP) ──────────────────────────
   - name: "Hugging Face Daily Papers"
     url: "https://papers.takara.ai/api/feed"
     type: rss
     categories: [ai, machine_learning, deep_learning]
     priority: 1
-    phase: 1
 
   - name: "Hacker News Best"
     type: hn_api
@@ -27,15 +26,12 @@ daily_sources:
     lookback_hours: 24
     categories: [technology, startups, engineering]
     priority: 1
-    phase: 1
 
-  # ── Phase 2 (+源) ──────────────────────────
   - name: "arXiv CS.AI"
     url: "https://export.arxiv.org/rss/cs.AI"
     type: rss
     categories: [ai, theory, algorithms]
     priority: 2
-    phase: 2
     filter: "仅保留涉及新方法/新架构/SOTA突破的论文"
 
   - name: "arXiv CS.CL"
@@ -43,7 +39,6 @@ daily_sources:
     type: rss
     categories: [nlp, language_models, reasoning]
     priority: 2
-    phase: 2
     filter: "聚焦 reasoning, alignment, agents, multimodal 方向"
 
   - name: "GitHub Trending"
@@ -51,47 +46,38 @@ daily_sources:
     languages: [rust, zig, go, python, typescript]
     categories: [open_source, tools, frameworks]
     priority: 2
-    phase: 2
 
   - name: "Reddit r/MachineLearning"
     url: "https://www.reddit.com/r/MachineLearning/.rss"
     type: rss
     categories: [ai, community, discussion]
     priority: 2
-    phase: 2
 
   - name: "Reddit r/LocalLLaMA"
     url: "https://www.reddit.com/r/LocalLLaMA/.rss"
     type: rss
     categories: [ai, local_inference, community]
     priority: 2
-    phase: 2
 
-  # ── Phase 3 (全量) ──────────────────────────
   - name: "Papers with Code Trending"
     url: "https://paperswithcode.com/trending"
     type: web_scrape
     categories: [ai, implementation, benchmarks]
     priority: 1
-    phase: 3
     note: "正则匹配 /papers/ 链接（v2.2 修复）"
 
 weekly_sources:
-  # ── Phase 1 (MVP) ──────────────────────────
   - name: "Quanta Magazine"
     url: "https://www.quantamagazine.org/feed/"
     type: rss
     categories: [mathematics, physics, computer_science, biology]
     priority: 1
-    phase: 1
 
-  # ── Phase 2 ────────────────────────────────
   - name: "LessWrong"
     url: "https://www.lesswrong.com/feed.xml"
     type: rss
     categories: [rationality, cognitive_science, ai_safety, epistemology]
     priority: 1
-    phase: 2
 
   - name: "First Round Review"
     url: "https://review.firstround.com"
@@ -99,7 +85,6 @@ weekly_sources:
     ghost_api_key_env: "GHOST_FIRSTROUND_KEY"
     categories: [startups, management, product, growth]
     priority: 1
-    phase: 2
     note: "Ghost Content API。需设置 GHOST_FIRSTROUND_KEY 环境变量"
 
   - name: "Matt Levine - Money Stuff"
@@ -107,7 +92,6 @@ weekly_sources:
     type: rss
     categories: [finance, markets, corporate, humor]
     priority: 1
-    phase: 2
     enabled: false
     note: "Bloomberg 全面封锁 (RSS 404, 页面 403)。建议用户邮件订阅: bloomberg.com/account/newsletters/money-stuff"
 
@@ -117,23 +101,19 @@ weekly_sources:
     series_ids: [GDP, UNRATE, CPIAUCSL, DFF, T10Y2Y]
     categories: [economics, macro, data, policy]
     priority: 2
-    phase: 2
     note: "需设置 FRED_API_KEY 环境变量，未设置则跳过"
 
-  # ── Phase 3 (全量) ─────────────────────────
   - name: "Nature Latest Research"
     url: "http://feeds.nature.com/nature/rss/current"
     type: rss
     categories: [science, biology, physics, chemistry]
     priority: 2
-    phase: 2
 
   - name: "Aeon"
     url: "https://aeon.co/feed.rss"
     type: rss
     categories: [philosophy, cognitive_science, culture, ethics]
     priority: 2
-    phase: 2
     note: "feed.xml 被 Vercel 反爬 429，改用 feed.rss"
 
   - name: "Stratechery (Free Weekly)"
@@ -141,7 +121,6 @@ weekly_sources:
     type: rss
     categories: [business_strategy, technology, market_analysis]
     priority: 1
-    phase: 2
     note: "免费层仅周刊文章"
 
   - name: "a16z Blog"
@@ -149,21 +128,18 @@ weekly_sources:
     type: rss
     categories: [venture_capital, technology_trends]
     priority: 2
-    phase: 3
 
   - name: "MIT Sloan Management Review"
     url: "https://sloanreview.mit.edu/feed/"
     type: rss
     categories: [management, digital_transformation, leadership, ai_strategy]
     priority: 2
-    phase: 3
 
   - name: "NBER Working Papers"
     url: "https://www.nber.org/rss/new.xml"
     type: rss
     categories: [economics, policy, finance, labor]
     priority: 2
-    phase: 3
 
 verification_sources:
   - name: "Semantic Scholar"

@@ -1,9 +1,9 @@
 ---
 name: knowledge-harvester
-version: "2.2"
+version: "2.3"
 last_updated: "2026-03-12"
 description: |
-  前沿知识采集系统 v2.2（三层管道架构 + 动态源发现 + 原文获取）。
+  前沿知识采集系统 v2.3（三层管道架构 + 动态源发现 + 原文获取）。
   Layer 1（Python 脚本）负责确定性 RSS/API 采集与去重（支持断点续传）。
   Layer 2（本 Skill / harvest_llm.py）负责 LLM 判断——两阶段漏斗筛选 + 知识笔记生成。
   Layer 3（半自动）负责笔记聚类 → Skill 草稿合成。
@@ -33,14 +33,14 @@ triggers:
 使用 `exec` 工具运行 Python 采集脚本：
 
 ```bash
-# 日频采集（Phase 1 MVP: 3源）
-python ~/.openclaw/extensions/ai-skills/knowledge-harvester/scripts/fetch_sources.py --mode daily --phase 2
+# 日频采集
+python ~/.openclaw/extensions/ai-skills/knowledge-harvester/scripts/fetch_sources.py --mode daily
 
 # 周频采集
-python ~/.openclaw/extensions/ai-skills/knowledge-harvester/scripts/fetch_sources.py --mode weekly --phase 2
+python ~/.openclaw/extensions/ai-skills/knowledge-harvester/scripts/fetch_sources.py --mode weekly
 
 # 全量采集
-python ~/.openclaw/extensions/ai-skills/knowledge-harvester/scripts/fetch_sources.py --mode full --phase 2
+python ~/.openclaw/extensions/ai-skills/knowledge-harvester/scripts/fetch_sources.py --mode full
 ```
 
 脚本会输出 `~/.openclaw/knowledge/logs/pending_items.json`，包含去重后的待处理条目。
@@ -113,7 +113,7 @@ tags: [tag1, tag2, tag3]
 
 ### Step 6: 输出采集报告
 
-完成后输出简明统计：
+完成后输出简明统计示例：
 
 ```
 📊 采集报告 [daily] 2026-03-11
@@ -184,7 +184,7 @@ python ~/.openclaw/extensions/ai-skills/knowledge-harvester/scripts/promote_draf
 ~/.openclaw/
 ├── extensions/ai-skills/knowledge-harvester/  # 能力定义（git 管理）
 │   ├── SKILL.md          ← 本文件（Layer 2 指令）
-│   ├── sources.yaml      ← 信息源配置（含 phase/enabled 字段）
+│   ├── sources.yaml      ← 信息源配置（含 enabled 字段）
 │   └── scripts/
 │       ├── config.py           ← 统一路径常量
 │       ├── fetch_sources.py    ← Layer 1: 模块化 Adapter 采集 + 去重 + 断点续传
@@ -218,4 +218,3 @@ python ~/.openclaw/extensions/ai-skills/knowledge-harvester/scripts/promote_draf
 2. **笔记简洁**: 每篇知识笔记控制在 50 行以内
 3. **必须附来源**: 所有笔记必须有 source URL
 4. **版权合规**: 仅提取知识要点，不搬运原文
-5. **分阶段上线**: 严格按 `sources.yaml` 的 `phase` 字段控制源数量
