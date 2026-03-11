@@ -18,7 +18,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -249,20 +248,7 @@ def run(
 
     # ── 采集循环 ──
     headers = {"User-Agent": USER_AGENT}
-    
-    # 代理配置：支持 HTTP_PROXY / HTTPS_PROXY 环境变量
-    proxies = None
-    for key in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"]:
-        if key in os.environ:
-            proxies = os.environ[key]
-            log.info(f"  🌐 使用代理: {proxies}")
-            break
-    
-    client_kwargs = {"timeout": HTTP_TIMEOUT, "headers": headers}
-    if proxies:
-        client_kwargs["proxy"] = proxies
-    
-    with httpx.Client(**client_kwargs) as client:
+    with httpx.Client(timeout=HTTP_TIMEOUT, headers=headers) as client:
         for group in groups:
             for src in sources_cfg.get(group, []):
                 name = src["name"]
