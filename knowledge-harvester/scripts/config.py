@@ -35,3 +35,7 @@ CHECKPOINT_FILE = LOGS_DIR / "fetch_checkpoint.json"
 # ── HTTP 配置 ─────────────────────────────────────────────
 HTTP_TIMEOUT = 30
 USER_AGENT = "OpenClaw-KnowledgeHarvester/2.2 (+https://github.com/openclaw)"
+
+# ── 代理配置 ─────────────────────────────────────────────
+# 支持环境变量: HTTP_PROXY, HTTPS_PROXY (大小写都支持)
+# 示例: export HTTP_PROXY=http://127.0.0.1:7890
