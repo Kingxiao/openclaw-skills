@@ -4,13 +4,23 @@
 
 ## 简介
 
-本仓库收录了我创建和维护的高质量 OpenClaw Skills，涵盖 AI 咨询、产品设计、技术架构等多个领域。
+本仓库收录了我创建和维护的高质量 OpenClaw Skills，涵盖 AI 咨询、自动化、知识管理等多个领域。
+
+## 目录结构
+
+```
+openclaw-skills/
+├── README.md
+├── openclaw-assistant/    # OpenClaw 全能辅助
+├── knowledge-harvester/    # 知识收割机
+└── ...
+```
 
 ## Skills 列表
 
-### openclaw-assistant
+### 1. openclaw-assistant
 
-OpenClaw 全能辅助技能 - 自我认知、配置诊断、故障排查。
+OpenClaw 全能辅助技能。
 
 **功能：**
 - 自我能力评估
@@ -18,9 +28,14 @@ OpenClaw 全能辅助技能 - 自我认知、配置诊断、故障排查。
 - 架构与配置咨询
 - 安全审查
 
-### knowledge-harvester
+**安装：**
+```bash
+cp -r openclaw-assistant ~/.openclaw/skills/
+```
 
-知识收割机 - 从多种来源（网页、文档、GitHub）自动采集和整理知识。
+### 2. knowledge-harvester
+
+知识收割机 - 从多种来源自动采集和整理知识。
 
 **功能：**
 - 自动化知识采集
@@ -32,25 +47,40 @@ OpenClaw 全能辅助技能 - 自我认知、配置诊断、故障排查。
 - 竞品分析
 - 技术调研
 
-## 安装
-
-将这些 Skills 复制到你的 OpenClaw 工作区：
-
+**安装：**
 ```bash
 cp -r knowledge-harvester ~/.openclaw/skills/
 ```
 
+## 快速开始
+
+1. 克隆本仓库：
+```bash
+git clone https://github.com/Kingxiao/openclaw-skills.git
+```
+
+2. 安装需要的 Skill：
+```bash
+cp -r <skill-name> ~/.openclaw/skills/
+```
+
+3. 重启 OpenClaw Gateway：
+```bash
+openclaw gateway restart
+```
+
 ## 关于 OpenClaw
 
-OpenClaw 是一个开源的 AI Agent 框架，支持多种模型和工具集成。
+OpenClaw 是一个开源的 AI Agent 框架。
 
 - 官网：https://openclaw.ai
 - GitHub：https://github.com/openclaw/openclaw
+- 文档：https://docs.openclaw.ai
 
 ## 许可证
 
 MIT License
 
-## 贡献
+## 联系方式
 
-欢迎提交 Issue 和 PR！
+- GitHub Issues: https://github.com/Kingxiao/openclaw-skills/issues
