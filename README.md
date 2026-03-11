@@ -8,6 +8,16 @@
 
 ## Skills 列表
 
+### openclaw-assistant
+
+OpenClaw 全能辅助技能 - 自我认知、配置诊断、故障排查。
+
+**功能：**
+- 自我能力评估
+- SKILL.md 生成
+- 架构与配置咨询
+- 安全审查
+
 ### knowledge-harvester
 
 知识收割机 - 从多种来源（网页、文档、GitHub）自动采集和整理知识。
