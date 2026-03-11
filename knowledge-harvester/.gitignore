@@ -1,0 +1,7 @@
+# 开源仓库忽略规则
+__pycache__/
+*.pyc
+.env
+
+# 运行时数据（由脚本自动生成）
+# 这些文件在 ~/.openclaw/knowledge/ 下生成，不在 skill 目录内
