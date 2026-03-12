@@ -338,7 +338,6 @@ def add_to_sources(
     probe: ProbeResult,
     name: str | None = None,
     frequency: str = "daily",
-    phase: int = 2,
     categories: list[str] | None = None,
     dry_run: bool = False,
 ) -> dict:
@@ -351,7 +350,6 @@ def add_to_sources(
         "type": probe.feed_type if probe.feed_type != "atom" else "rss",
         "categories": categories or ["custom"],
         "priority": 2,
-        "phase": phase,
         "auto_discovered": True,
         "discovered_at": now.isoformat(),
         "discovery_strategy": probe.strategy,
@@ -409,10 +407,6 @@ def main():
     parser.add_argument(
         "--frequency", choices=["daily", "weekly"], default="daily",
         help="采集频率 (default: daily)"
-    )
-    parser.add_argument(
-        "--phase", type=int, choices=[1, 2, 3], default=2,
-        help="源阶段 (default: 2)"
     )
     parser.add_argument(
         "--categories", help="分类标签，逗号分隔 (如: ai,tools,frameworks)"
@@ -487,7 +481,6 @@ def main():
             probe=best,
             name=args.name,
             frequency=args.frequency,
-            phase=args.phase,
             categories=categories,
             dry_run=args.dry_run,
         )

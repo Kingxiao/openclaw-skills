@@ -184,8 +184,8 @@ class Checkpoint:
 
 
 # ── 源配置加载 ────────────────────────────────────────────
-def load_sources(phase: int) -> dict[str, list[dict]]:
-    """加载 sources.yaml，按 phase 过滤。"""
+def load_sources() -> dict[str, list[dict]]:
+    """加载 sources.yaml，仅按 enabled 字段过滤。"""
     if not SOURCES_YAML.exists():
         log.error(f"sources.yaml 不存在: {SOURCES_YAML}")
         sys.exit(1)
@@ -198,7 +198,7 @@ def load_sources(phase: int) -> dict[str, list[dict]]:
         sources = cfg.get(group, [])
         filtered = [
             s for s in sources
-            if s.get("phase", 1) <= phase and s.get("enabled", True) is not False
+            if s.get("enabled", True) is not False
         ]
         if filtered:
             result[group] = filtered
@@ -208,7 +208,6 @@ def load_sources(phase: int) -> dict[str, list[dict]]:
 # ── 主逻辑（纯编排，不含任何具体采集逻辑） ────────────────
 def run(
     mode: str = "daily",
-    phase: int = 1,
     dry_run: bool = False,
     resume: bool = True,
 ) -> dict[str, Any]:
@@ -222,7 +221,7 @@ def run(
     else:
         ckpt.clear()
         run_id = ckpt.get_run_id()
-        log.info(f"=== 采集开始 [{mode}] phase={phase} run_id={run_id} @ {now.isoformat()} ===")
+        log.info(f"=== 采集开始 [{mode}] run_id={run_id} @ {now.isoformat()} ===")
 
     # 加载 adapters
     adapters.auto_discover()
@@ -230,7 +229,7 @@ def run(
     log.info(f"  可用 adapter: {list(registered.keys())}")
 
     # 加载源配置
-    sources_cfg = load_sources(phase)
+    sources_cfg = load_sources()
     groups = []
     if mode in ("daily", "full"):
         groups.append("daily_sources")
@@ -310,7 +309,7 @@ def run(
     output = {
         "generated_at": now.isoformat(),
         "run_id": run_id,
-        "mode": mode, "phase": phase,
+        "mode": mode,
         "stats": stats,
         "items": all_pending,
     }
@@ -326,7 +325,7 @@ def run(
 
     # ── 报告 ──
     report = (
-        f"\n📊 采集报告 [{mode}] phase={phase} {now.strftime('%Y-%m-%d %H:%M')}\n"
+        f"\n📊 采集报告 [{mode}] {now.strftime('%Y-%m-%d %H:%M')}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"总拉取: {stats['total_fetched']} | 去重: {stats['duplicates']} | "
         f"待处理: {stats['pending']} | 错误: {stats['errors']}\n"
@@ -347,7 +346,6 @@ def main():
         description="Knowledge Harvester Layer 1 — 模块化 Adapter 采集（支持断点续传）"
     )
     parser.add_argument("--mode", choices=["daily", "weekly", "full"], default="daily")
-    parser.add_argument("--phase", type=int, choices=[1, 2, 3], default=1)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-resume", action="store_true", help="禁用断点续传")
     parser.add_argument("--list-adapters", action="store_true", help="列出已注册的 adapter")
@@ -368,7 +366,7 @@ def main():
             print(f"  • {name:20s} → {a.__class__.__name__} ({a.__class__.__module__})")
         return
 
-    run(mode=args.mode, phase=args.phase, dry_run=args.dry_run, resume=not args.no_resume)
+    run(mode=args.mode, dry_run=args.dry_run, resume=not args.no_resume)
 
 
 if __name__ == "__main__":
