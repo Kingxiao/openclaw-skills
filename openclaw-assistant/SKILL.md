@@ -1,6 +1,6 @@
 ---
 name: openclaw-assistant
-description: "OpenClaw 全能辅助技能。当用户提到以下任何内容时必须激活：OpenClaw、ClawHub、clawhub、openclaw gateway、openclaw skill、openclaw 技能、openclaw 配置、openclaw 优化、openclaw 安全、Pi agent（OpenClaw 语境）、openclaw 部署、openclaw 故障、openclaw 的 SKILL.md、openclaw 的 SOUL.md、openclaw 的 AGENTS.md、openclaw 的 HEARTBEAT.md、openclaw 的 MEMORY.md。覆盖场景：(1) 为 OpenClaw agent 生成 SKILL.md；(2) 审查/优化 OpenClaw skill；(3) 编写 SOUL.md、AGENTS.md 等 OpenClaw 工作区文件；(4) 诊断 OpenClaw 部署与配置问题；(5) 解答 OpenClaw 架构/Gateway/Memory/Channel 概念问题；(6) 安全审查 ClawHub 社区 skill（包括 CVE 告警）；(7) 给出 OpenClaw 优化建议。触发关键词必须与 OpenClaw 生态明确相关，避免因通用词汇（如单独的 SKILL.md、SOUL.md）误触。"
+description: "OpenClaw 全能辅助技能。当用户提到以下任何内容时必须激活：OpenClaw、ClawHub、clawhub、openclaw gateway、openclaw skill、openclaw 技能、openclaw 配置、openclaw 优化、openclaw 安全、Pi agent（OpenClaw 语境）、openclaw 部署、openclaw 故障、openclaw 的 SKILL.md、openclaw 的 SOUL.md、openclaw 的 AGENTS.md、openclaw 的 HEARTBEAT.md、openclaw 的 MEMORY.md。**当用户询问如何让 agent 自我学习、自我进化、每日复盘、建立学习闭环、agent 自我改进系统时使用。**覆盖场景：(1) 为 OpenClaw agent 生成 SKILL.md；(2) 审查/优化 OpenClaw skill；(3) 编写 SOUL.md、AGENTS.md 等 OpenClaw 工作区文件；(4) 诊断 OpenClaw 部署与配置问题；(5) 解答 OpenClaw 架构/Gateway/Memory/Channel 概念问题；(6) 安全审查 ClawHub 社区 skill（包括 CVE 告警）；(7) 给出 OpenClaw 优化建议。触发关键词必须与 OpenClaw 生态明确相关，避免因通用词汇（如单独的 SKILL.md、SOUL.md）误触。"
 metadata:
   openclaw:
     emoji: "🦞"
