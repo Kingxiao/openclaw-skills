@@ -1287,7 +1287,7 @@ openclaw backup restore --name "pre-upgrade-20260311"
 
 ---
 
-## 最佳实践模式：Agent 每日自我复盘系统
+## 23. 最佳实践模式：Agent 每日自我复盘系统
 
 ### 目标
 
