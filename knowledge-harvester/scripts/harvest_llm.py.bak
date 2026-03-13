@@ -52,24 +52,13 @@ class LLMBackend:
         """调用 LLM CLI，返回文本输出。"""
         log.debug(f"  LLM [{self.name}] prompt 长度={len(prompt)} chars")
         try:
-            # gemini 需要参数输入，不支持 stdin
-            if self.name == "gemini":
-                cmd = self.cmd + [prompt]
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
-                )
-            else:
-                # claude 支持 stdin
-                result = subprocess.run(
-                    self.cmd,
-                    input=prompt,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
-                )
+            result = subprocess.run(
+                self.cmd,
+                input=prompt,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
             if result.returncode != 0:
                 stderr = result.stderr.strip()
                 log.warning(f"  LLM [{self.name}] 非零退出码 {result.returncode}: {stderr[:200]}")
@@ -87,7 +76,7 @@ class LLMBackend:
 def detect_backend(preferred: str | None = None) -> LLMBackend:
     """检测可用的 LLM CLI 后端。优先级: preferred > gemini > claude。"""
     backends = {
-        "gemini": ["gemini", "-p"],  # 需要参数: gemini -p "prompt"
+        "gemini": ["gemini", "-p"],
         "claude": ["claude", "-p", "--verbose"],
     }
 
