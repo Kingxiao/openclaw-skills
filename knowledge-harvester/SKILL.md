@@ -18,7 +18,22 @@ triggers:
   - "添加渠道"
   - "关注这个"
   - "add source"
----
+
+# 定时任务配置 (Layer 3 自动化的关键)
+
+## cron 任务定义
+
+| 任务名 | 频率 | 执行时间 (Asia/Shanghai) | 脚本 | 说明 |
+|--------|------|-------------------------|------|------|
+| knowledge-cluster-daily | 每日 | 7:00 | cluster_notes.py | 检测笔记集群是否成熟 |
+| knowledge-cluster-weekly | 每周一 | 8:00 | cluster_notes.py --generate-drafts | 生成 Skill 草稿 |
+| knowledge-promote-monthly | 每月1日 | 9:00 | promote_draft.py --auto | 自动发布成熟 Skill |
+
+## 定时任务触发消息
+
+- **每日检测**: "执行知识聚类检测 (cluster_notes.py)"
+- **每周生成**: "检查笔记集群，对成熟主题生成 Skill 草稿"
+- **每月发布**: "检查待发布 Skill 草案，执行发布流程"
 
 # Knowledge Harvester v2
 
