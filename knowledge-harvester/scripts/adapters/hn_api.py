@@ -11,9 +11,7 @@ import logging
 import time
 from typing import Any
 
-import httpx
-
-from . import SourceAdapter, http_get, make_item, register
+from . import HTTPConfig, http_get, make_item, register
 
 log = logging.getLogger("adapters.hn_api")
 
@@ -25,7 +23,7 @@ class HNApiAdapter:
 
     adapter_type = "hn_api"
 
-    def fetch(self, config: dict[str, Any], client: httpx.Client) -> list[dict[str, Any]]:
+    def fetch(self, config: dict[str, Any], client: HTTPConfig) -> list[dict[str, Any]]:
         min_points = config.get("min_points", 100)
         hours = config.get("lookback_hours", 24)
         ts_cutoff = int(time.time()) - hours * 3600

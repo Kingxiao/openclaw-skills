@@ -15,9 +15,7 @@ import logging
 import os
 from typing import Any
 
-import httpx
-
-from . import SourceAdapter, http_get, make_item, register
+from . import HTTPConfig, http_get, make_item, register
 
 log = logging.getLogger("adapters.fred_api")
 
@@ -27,7 +25,7 @@ class FREDApiAdapter:
 
     adapter_type = "fred_api"
 
-    def fetch(self, config: dict[str, Any], client: httpx.Client) -> list[dict[str, Any]]:
+    def fetch(self, config: dict[str, Any], client: HTTPConfig) -> list[dict[str, Any]]:
         key_env = config.get("api_key_env", "FRED_API_KEY")
         api_key = os.environ.get(key_env, "")
         if not api_key:

@@ -16,8 +16,6 @@ import argparse
 import json
 import logging
 import re
-import shutil
-import subprocess
 import sys
 import textwrap
 from collections import Counter
@@ -27,6 +25,7 @@ from pathlib import Path
 import yaml
 
 from config import SHANGHAI_TZ, NOTES_DIR, DRAFTS_DIR
+from harvest_llm import LLMBackend, detect_backend
 
 CLUSTER_THRESHOLD = 3  # >= N 篇笔记 → 标记为成熟集群
 
@@ -68,35 +67,6 @@ def scan_notes() -> list[dict]:
         else:
             log.debug(f"跳过无 frontmatter 的文件: {md_file.name}")
     return notes
-
-
-# ── LLM 后端（复用 harvest_llm 的逻辑） ──────────────────
-def _call_llm(prompt: str, backend: str | None = None, timeout: int = 90) -> str:
-    """调用 LLM CLI。"""
-    backends = {
-        "gemini": ["gemini", "-p"],
-        "claude": ["claude", "-p", "--verbose"],
-    }
-    if backend and backend in backends:
-        cmd = backends[backend]
-    else:
-        for name, cmd in backends.items():
-            if shutil.which(cmd[0]):
-                backend = name
-                break
-        else:
-            log.error("未找到可用的 LLM CLI (gemini / claude)")
-            return ""
-
-    log.debug(f"  LLM [{backend}] prompt {len(prompt)} chars")
-    try:
-        result = subprocess.run(
-            cmd, input=prompt, capture_output=True, text=True, timeout=timeout
-        )
-        return result.stdout.strip()
-    except Exception as e:
-        log.error(f"  LLM [{backend}] 调用失败: {e}")
-        return ""
 
 
 # ── LLM 聚类 ─────────────────────────────────────────────
@@ -163,7 +133,7 @@ def parse_cluster_result(raw: str) -> dict:
 
 def run_llm_clustering(
     notes: list[dict],
-    backend: str | None = None,
+    backend_name: str | None = None,
     dry_run: bool = False,
 ) -> dict:
     """调用 LLM 对笔记做语义聚类。"""
@@ -174,8 +144,9 @@ def run_llm_clustering(
         print(prompt[:1000] + "...")
         return {"clusters": [], "ungrouped": list(range(len(notes)))}
 
-    log.info(f"  ▸ 调用 LLM 进行语义聚类 ({len(notes)} 篇笔记)...")
-    raw = _call_llm(prompt, backend)
+    llm = detect_backend(backend_name)
+    log.info(f"  ▸ 调用 LLM [{llm.name}] 进行语义聚类 ({len(notes)} 篇笔记)...")
+    raw = llm.call(prompt, timeout=90)
 
     if not raw:
         log.error("  LLM 无输出")
@@ -214,7 +185,7 @@ def run(
 
     # LLM 语义聚类
     log.info("  ▸ LLM 语义聚类...")
-    result = run_llm_clustering(notes, backend, dry_run)
+    result = run_llm_clustering(notes, backend_name=backend, dry_run=dry_run)
 
     # 转为报告格式
     mature_clusters = {}

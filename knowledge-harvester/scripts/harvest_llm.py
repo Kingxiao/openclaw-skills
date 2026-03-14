@@ -24,7 +24,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import httpx
+from urllib.request import Request, urlopen
+from urllib.error import URLError
 
 import yaml
 
@@ -111,9 +112,36 @@ def detect_backend(preferred: str | None = None) -> LLMBackend:
 SCREEN_PROMPT_TEMPLATE = textwrap.dedent("""\
 你是一个知识过滤器。你的任务是判断以下信息条目是否值得深入阅读。
 
-判断标准: "这条信息能教会我一个新的做法、新的思考方式或新的工具吗?"
-- PASS: 有实质性新知识/新方法/新工具/重要趋势
-- SKIP: 增量改进 / 重复已知 / 纯新闻无干货 / 营销内容
+## 用户兴趣权重
+
+重点关注（高优先级 — 满足任一即倾向 PASS）:
+- AI Agent 架构、多 Agent 系统、Agent 工具调用
+- Rust / Zig 系统编程（性能优化、内存安全、编译器）
+- 认知科学（决策模型、思维框架、学习理论）
+- 一人公司 / 独立开发者（商业模式、效率工具、自动化）
+
+次要关注（中优先级 — 需有实质内容才 PASS）:
+- AI 论文：仅 SOTA 突破或全新范式，增量改进 SKIP
+- 开源工具：有明确使用场景和可复现的方法
+
+直接过滤（低优先级 — 默认 SKIP）:
+- 纯新闻报道 / 政治评论
+- 增量版本更新（如 v1.2.3 → v1.2.4）
+- 无方法论支撑的观点文章 / 营销内容
+
+## 硬约束
+
+条目必须包含以下至少一项才能 PASS:
+1. 可复现的方法（有步骤、有代码、有架构图）
+2. 可直接使用的工具（有仓库地址或安装方式）
+3. 有数据支撑的新发现（有实验、有 benchmark、有案例）
+
+不满足以上任何一项的，即使主题相关也应 SKIP。
+
+## 判断标准
+
+- PASS: 满足兴趣权重 + 硬约束，有实质性新知识/新方法/新工具
+- SKIP: 不满足硬约束 / 增量改进 / 重复已知 / 纯新闻 / 营销内容
 
 请严格按照以下 JSON 格式输出，不要有任何额外文字:
 ```json
@@ -203,33 +231,94 @@ def run_screening(
 ARTICLE_MAX_CHARS = 8000  # 拼入 prompt 的原文上限
 
 
-def fetch_article_body(url: str) -> str:
-    """获取文章原文正文，返回纯文本（去 HTML 标签）。"""
-    if not url:
+def _fetch_arxiv_abstract(url: str) -> str:
+    """从 arXiv abs 页面或 API 获取论文摘要。"""
+    # 从 URL 提取 arXiv ID (支持 abs/pdf/html 格式)
+    arxiv_match = re.search(r'arxiv\.org/(?:abs|pdf|html)/(\d+\.\d+(?:v\d+)?)', url)
+    if not arxiv_match:
         return ""
+
+    arxiv_id = arxiv_match.group(1)
+    api_url = f"http://export.arxiv.org/api/query?id_list={arxiv_id}"
     try:
-        headers = {"User-Agent": USER_AGENT}
-        resp = httpx.get(url, headers=headers, follow_redirects=True, timeout=HTTP_TIMEOUT)
-        resp.raise_for_status()
-    except Exception as e:
-        log.debug(f"    原文获取失败: {url} → {e}")
-        return ""
+        req = Request(api_url, headers={"User-Agent": USER_AGENT})
+        with urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+            xml = resp.read().decode("utf-8", errors="replace")
 
-    html = resp.text
+        # 提取 <summary> 标签
+        summary_match = re.search(r'<summary>(.*?)</summary>', xml, re.DOTALL)
+        if summary_match:
+            abstract = summary_match.group(1).strip()
+            # 提取标题
+            title_match = re.search(r'<title>(.*?)</title>', xml, re.DOTALL)
+            title = title_match.group(1).strip() if title_match else ""
+            # 提取作者
+            authors = re.findall(r'<name>(.*?)</name>', xml)
+            authors_str = ", ".join(authors[:5])
+            if len(authors) > 5:
+                authors_str += f" et al. ({len(authors)} authors)"
 
-    # 尝试提取 <article> 或 <main> 区域
-    for tag in ("article", "main"):
-        match = re.search(rf"<{tag}[^>]*>(.*?)</{tag}>", html, re.DOTALL | re.IGNORECASE)
+            return f"Title: {title}\nAuthors: {authors_str}\n\nAbstract:\n{abstract}"
+    except (URLError, OSError, ValueError) as e:
+        log.debug(f"    arXiv API 获取失败: {arxiv_id} → {e}")
+    return ""
+
+
+def _clean_html_to_text(html: str) -> str:
+    """将 HTML 清理为纯文本。"""
+    # 尝试提取语义化内容区域（按优先级）
+    for tag in ("article", "main", r'div[^>]*class="[^"]*content[^"]*"',
+                r'div[^>]*class="[^"]*post[^"]*"', r'div[^>]*class="[^"]*entry[^"]*"'):
+        if tag.startswith("div"):
+            pattern = rf"<{tag}>(.*?)</div>"
+        else:
+            pattern = rf"<{tag}[^>]*>(.*?)</{tag}>"
+        match = re.search(pattern, html, re.DOTALL | re.IGNORECASE)
         if match:
             html = match.group(1)
             break
 
-    # 去 script/style
-    html = re.sub(r"<(script|style|nav|header|footer)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
-    # 去 HTML 标签
+    # 去除噪声元素
+    for noise_tag in ("script", "style", "nav", "header", "footer",
+                       "aside", "noscript", "iframe", "svg"):
+        html = re.sub(
+            rf"<{noise_tag}[^>]*>.*?</{noise_tag}>", "",
+            html, flags=re.DOTALL | re.IGNORECASE
+        )
+    # 去除 HTML 注释
+    html = re.sub(r"<!--.*?-->", "", html, flags=re.DOTALL)
+    # 将 <br>/<p>/<li> 转换为换行
+    html = re.sub(r"<br\s*/?>", "\n", html, flags=re.IGNORECASE)
+    html = re.sub(r"</p>|</li>|</div>|</h[1-6]>", "\n", html, flags=re.IGNORECASE)
+    # 去除剩余 HTML 标签
     text = re.sub(r"<[^>]+>", " ", html)
-    # 清理空白
-    text = re.sub(r"\s+", " ", text).strip()
+    # 清理多余空白（保留换行结构）
+    text = re.sub(r"[^\S\n]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def fetch_article_body(url: str) -> str:
+    """获取文章原文正文，返回纯文本。对 arXiv 直接获取 abstract。"""
+    if not url:
+        return ""
+
+    # arXiv 特殊处理
+    if "arxiv.org" in url:
+        abstract = _fetch_arxiv_abstract(url)
+        if abstract:
+            log.info(f"    ✓ arXiv abstract 获取成功")
+            return abstract
+
+    try:
+        req = Request(url, headers={"User-Agent": USER_AGENT})
+        with urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+            html = resp.read().decode(resp.headers.get_content_charset() or "utf-8", errors="replace")
+    except (URLError, OSError, ValueError) as e:
+        log.debug(f"    原文获取失败: {url} → {e}")
+        return ""
+
+    text = _clean_html_to_text(html)
 
     if len(text) > ARTICLE_MAX_CHARS:
         text = text[:ARTICLE_MAX_CHARS] + "... [截断]"
@@ -299,6 +388,59 @@ tags: [{{从对应 domain 的 topics 中选 1-3 个}}]
 ## 可操作要点
 
 - {{具体可以怎么做/怎么用}}
+```
+""")
+
+
+# ── 批量笔记生成 prompt ──────────────────────────────────
+NOTE_BATCH_SIZE = 5  # 每次批量生成的笔记数
+
+BATCH_NOTE_PROMPT_TEMPLATE = textwrap.dedent("""\
+你是一个知识提取专家。请基于以下多篇文章的原文内容，为每篇分别生成一篇结构化的知识笔记。
+**你必须仅从原文中提炼知识，严禁编造不在原文中的信息。**
+
+## 分类约束（必须严格遵守）
+
+domain 必须从以下列表中选择一个，tags 必须从对应 domain 的 topics 中选择 1-3 个：
+
+{taxonomy}
+
+## 待处理文章
+
+{articles_block}
+
+## 输出格式
+
+请为每篇文章输出一篇笔记，用 `===ARTICLE_ID===` 分隔（ID 对应文章编号）。
+每篇笔记严格按以下 Markdown 格式：
+
+```
+===0===
+---
+source: "来源名"
+url: "原始URL"
+date: YYYY-MM-DD
+domain: 从上方列表选一个
+tags: [从对应 domain 选 1-3 个]
+---
+
+## 核心发现
+
+用 2-3 句话概括最重要的发现
+
+## 关键洞察
+
+1. 洞察1
+2. 洞察2
+3. 洞察3
+
+## 可操作要点
+
+- 具体可以怎么做/怎么用
+
+===1===
+---
+...（下一篇）
 ```
 """)
 
@@ -376,6 +518,124 @@ def generate_note(
     return filepath
 
 
+def generate_notes_batch(
+    items: list[dict], backend: LLMBackend, dry_run: bool = False
+) -> dict[int, Path | None]:
+    """批量调用 LLM 生成多篇笔记，减少 API 调用次数。返回 {item_index: filepath}。"""
+    now = datetime.now(SHANGHAI_TZ)
+    taxonomy = load_taxonomy()
+    results: dict[int, Path | None] = {}
+
+    for batch_start in range(0, len(items), NOTE_BATCH_SIZE):
+        batch = items[batch_start : batch_start + NOTE_BATCH_SIZE]
+        batch_items_with_body: list[tuple[int, dict, str, str, Path]] = []
+
+        # 预获取所有原文 + 准备 slug/filepath
+        for i, item in enumerate(batch):
+            idx = batch_start + i
+            title = item.get("title", "Untitled")
+            url = item.get("url", "")
+            source = item.get("source_name", "Unknown")
+            summary = item.get("summary", "")
+
+            slug = re.sub(r'[^a-z0-9]+', '-', title.lower())[:60].strip('-') or "untitled"
+            filename = f"{now.strftime('%Y-%m-%d')}_{slug}.md"
+            filepath = NOTES_DIR / filename
+
+            if filepath.exists():
+                log.info(f"    笔记已存在，跳过: {filename}")
+                results[idx] = filepath
+                continue
+
+            log.info(f"    ▸ 获取原文: {url[:80]}")
+            body = fetch_article_body(url)
+            if not body:
+                body = f"(原文不可用，仅有摘要) {summary}"
+
+            batch_items_with_body.append((idx, item, body, filename, filepath))
+
+        if not batch_items_with_body:
+            continue
+
+        # 如果只有 1 篇，用单篇 prompt（更可靠）
+        if len(batch_items_with_body) == 1:
+            idx, item, body, filename, filepath = batch_items_with_body[0]
+            result_path = generate_note(item, backend, dry_run)
+            results[idx] = result_path
+            continue
+
+        # 构建批量 prompt
+        articles_lines = []
+        for local_i, (idx, item, body, filename, filepath) in enumerate(batch_items_with_body):
+            articles_lines.append(
+                f"### 文章 [{local_i}]\n"
+                f"来源: {item.get('source_name', 'Unknown')}\n"
+                f"标题: {item.get('title', 'Untitled')}\n"
+                f"URL: {item.get('url', '')}\n"
+                f"摘要: {item.get('summary', '')}\n\n"
+                f"原文正文:\n{body}\n"
+            )
+
+        prompt = BATCH_NOTE_PROMPT_TEMPLATE.format(
+            taxonomy=taxonomy,
+            articles_block="\n---\n\n".join(articles_lines),
+        )
+
+        if dry_run:
+            log.info(f"    [DRY RUN] 批量笔记: {len(batch_items_with_body)} 篇")
+            for idx, *_ in batch_items_with_body:
+                results[idx] = None
+            continue
+
+        log.info(f"    ▸ 批量生成 {len(batch_items_with_body)} 篇笔记...")
+        raw = backend.call(prompt, timeout=180)
+
+        if not raw:
+            log.warning("    批量笔记生成失败，回退到逐篇生成")
+            for idx, item, body, filename, filepath in batch_items_with_body:
+                result_path = generate_note(item, backend, dry_run)
+                results[idx] = result_path
+            continue
+
+        # 解析批量输出：按 ===ID=== 分隔
+        note_blocks: dict[int, str] = {}
+        parts = re.split(r'===(\d+)===', raw)
+        # parts: ['前导文字', '0', '笔记内容0', '1', '笔记内容1', ...]
+        for j in range(1, len(parts) - 1, 2):
+            try:
+                local_id = int(parts[j])
+                content = parts[j + 1].strip()
+                note_blocks[local_id] = content
+            except (ValueError, IndexError):
+                continue
+
+        # 写入每篇笔记
+        NOTES_DIR.mkdir(parents=True, exist_ok=True)
+        for local_i, (idx, item, body, filename, filepath) in enumerate(batch_items_with_body):
+            content = note_blocks.get(local_i, "")
+
+            # 提取 markdown 块
+            md_match = re.search(r'```markdown\s*\n([\s\S]*?)\n```', content)
+            if md_match:
+                content = md_match.group(1).strip()
+
+            if not content or not content.startswith("---"):
+                fm_match = re.search(r'(---[\s\S]*?---[\s\S]*)', content)
+                if fm_match:
+                    content = fm_match.group(1)
+                else:
+                    log.warning(f"    批量笔记 [{local_i}] 格式异常，回退到单篇生成: {filename}")
+                    result_path = generate_note(item, backend, dry_run)
+                    results[idx] = result_path
+                    continue
+
+            filepath.write_text(content + "\n", encoding="utf-8")
+            log.info(f"    ✅ 已写入: {filepath}")
+            results[idx] = filepath
+
+    return results
+
+
 # ── 日志记录 ──────────────────────────────────────────────
 def append_harvest_log(entries: list[dict]):
     """追加记录到 harvest.jsonl。"""
@@ -422,10 +682,23 @@ def run(
     log.info("── 阶段 1: 快筛 ──")
     passed_items = run_screening(items, backend, dry_run)
 
-    # 4. 深评 + 笔记生成
+    # 4. 深评 + 笔记生成（批量化）
     log.info("── 阶段 2: 深评 + 笔记生成 ──")
     generated_notes: list[Path] = []
     log_entries: list[dict] = []
+
+    # 批量生成 PASS 条目的笔记
+    batch_results: dict[int, Path | None] = {}
+    if passed_items and not dry_run:
+        batch_results = generate_notes_batch(passed_items, backend, dry_run)
+    elif passed_items and dry_run:
+        batch_results = generate_notes_batch(passed_items, backend, dry_run)
+
+    # 构建 passed_items 的 URL→结果映射
+    pass_note_map: dict[str, Path | None] = {}
+    for i, item in enumerate(passed_items):
+        url = item.get("url", "")
+        pass_note_map[url] = batch_results.get(i)
 
     for item in items:
         entry = {
@@ -436,7 +709,7 @@ def run(
         }
 
         if item.get("screen_decision") == "PASS":
-            note_path = generate_note(item, backend, dry_run)
+            note_path = pass_note_map.get(item.get("url", ""))
             if note_path:
                 generated_notes.append(note_path)
                 entry["decision"] = "PASS"

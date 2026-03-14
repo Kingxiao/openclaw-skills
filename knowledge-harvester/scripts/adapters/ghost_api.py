@@ -16,9 +16,7 @@ import logging
 from typing import Any
 from urllib.parse import urljoin
 
-import httpx
-
-from . import SourceAdapter, make_item, register
+from . import HTTPConfig, HTTPResponse, make_item, register
 
 log = logging.getLogger("adapters.ghost_api")
 
@@ -30,8 +28,9 @@ class GhostApiAdapter:
 
     adapter_type = "ghost_api"
 
-    def fetch(self, config: dict[str, Any], client: httpx.Client) -> list[dict[str, Any]]:
+    def fetch(self, config: dict[str, Any], client: HTTPConfig) -> list[dict[str, Any]]:
         import os
+        from urllib.error import HTTPError, URLError
 
         base_url = config.get("url", "").rstrip("/")
 
@@ -53,9 +52,8 @@ class GhostApiAdapter:
         )
 
         try:
-            resp = client.get(api_url, follow_redirects=True)
-            resp.raise_for_status()
-        except httpx.HTTPError as e:
+            resp = client.get(api_url)
+        except (HTTPError, URLError, OSError) as e:
             log.error(f"  ghost_api: 请求失败 → {e}")
             return []
 

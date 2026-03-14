@@ -10,14 +10,53 @@ core (fetch_sources.py) 通过 sources.yaml 的 `type` 字段路由到对应 ada
 from __future__ import annotations
 
 import importlib
+import json as _json
 import logging
 import pkgutil
+import ssl
+import time
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
-
-import httpx
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 log = logging.getLogger("adapters")
+
+
+# ── HTTP 响应包装 ─────────────────────────────────────────
+class HTTPResponse:
+    """轻量 HTTP 响应包装，提供 .text / .json() / .status_code 接口。"""
+
+    def __init__(self, data: bytes, status_code: int = 200, url: str = ""):
+        self._data = data
+        self.status_code = status_code
+        self.url = url
+
+    @property
+    def text(self) -> str:
+        return self._data.decode("utf-8", errors="replace")
+
+    def json(self) -> Any:
+        return _json.loads(self._data)
+
+
+# ── HTTP 配置（替代 httpx.Client） ────────────────────────
+class HTTPConfig:
+    """共享 HTTP 配置，传递给各 adapter 替代 httpx.Client。"""
+
+    def __init__(self, timeout: int = 30, user_agent: str = ""):
+        self.timeout = timeout
+        self.user_agent = user_agent
+        self._ssl_ctx = ssl.create_default_context()
+
+    def get(self, url: str) -> HTTPResponse:
+        """执行 GET 请求，返回 HTTPResponse。失败时抛出异常。"""
+        req = Request(url)
+        if self.user_agent:
+            req.add_header("User-Agent", self.user_agent)
+        with urlopen(req, timeout=self.timeout, context=self._ssl_ctx) as resp:
+            data = resp.read()
+            return HTTPResponse(data, status_code=resp.status, url=url)
 
 
 # ── Adapter 协议 ──────────────────────────────────────────
@@ -28,13 +67,13 @@ class SourceAdapter(Protocol):
     # adapter 处理的 type 名称（匹配 sources.yaml 中的 type 字段）
     adapter_type: str
 
-    def fetch(self, config: dict[str, Any], client: httpx.Client) -> list[dict[str, Any]]:
+    def fetch(self, config: dict[str, Any], client: HTTPConfig) -> list[dict[str, Any]]:
         """
         从源拉取条目。
 
         Args:
             config: sources.yaml 中该源的完整配置字典
-            client: 共享的 httpx.Client（已配置 timeout 和 UA）
+            client: 共享的 HTTPConfig（已配置 timeout 和 UA）
 
         Returns:
             标准化条目列表，每条必须包含:
@@ -77,34 +116,29 @@ RETRY_DELAY = 5  # seconds
 
 
 def http_get(
-    client: httpx.Client,
+    client: HTTPConfig,
     url: str,
     max_retries: int = MAX_RETRIES,
     retry_delay: float = RETRY_DELAY,
     dry_run: bool = False,
-) -> httpx.Response | None:
+) -> HTTPResponse | None:
     """带重试的 HTTP GET，供所有 adapter 使用。dry_run 时只试一次。"""
     if dry_run:
         max_retries = 1
-    import time
 
     for attempt in range(1, max_retries + 1):
         try:
-            resp = client.get(url, follow_redirects=True)
-            resp.raise_for_status()
-            return resp
-        except httpx.TimeoutException:
-            log.warning(f"  超时 [{attempt}/{max_retries}]: {url}")
-        except httpx.ConnectError:
-            log.warning(f"  连接失败 [{attempt}/{max_retries}]: {url}")
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code in (429, 503):
-                log.warning(f"  限流 [{attempt}/{max_retries}]: {url} → {e.response.status_code}")
+            return client.get(url)
+        except HTTPError as e:
+            if e.code in (429, 503):
+                log.warning(f"  限流 [{attempt}/{max_retries}]: {url} → {e.code}")
             else:
-                log.warning(f"  HTTP {e.response.status_code}: {url}")
+                log.warning(f"  HTTP {e.code}: {url}")
                 return None  # 非暂时性错误，不重试
-        except httpx.HTTPError as e:
-            log.warning(f"  网络错误 [{attempt}/{max_retries}]: {url} → {e}")
+        except (TimeoutError, OSError):
+            log.warning(f"  超时/连接失败 [{attempt}/{max_retries}]: {url}")
+        except URLError as e:
+            log.warning(f"  网络错误 [{attempt}/{max_retries}]: {url} → {e.reason}")
 
         if attempt < max_retries:
             wait = retry_delay * attempt

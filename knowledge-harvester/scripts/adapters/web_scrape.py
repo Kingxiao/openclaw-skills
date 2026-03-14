@@ -14,9 +14,7 @@ import re
 import logging
 from typing import Any
 
-import httpx
-
-from . import SourceAdapter, http_get, make_item, register
+from . import HTTPConfig, http_get, make_item, register
 
 log = logging.getLogger("adapters.web_scrape")
 
@@ -42,7 +40,7 @@ class WebScrapeAdapter:
 
     adapter_type = "web_scrape"
 
-    def fetch(self, config: dict[str, Any], client: httpx.Client) -> list[dict[str, Any]]:
+    def fetch(self, config: dict[str, Any], client: HTTPConfig) -> list[dict[str, Any]]:
         url = config.get("url", "")
         if not url:
             return []

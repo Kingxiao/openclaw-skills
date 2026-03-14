@@ -16,9 +16,8 @@ import logging
 from typing import Any
 
 import feedparser
-import httpx
 
-from . import SourceAdapter, http_get, make_item, register
+from . import HTTPConfig, http_get, make_item, register
 
 log = logging.getLogger("adapters.github_trending")
 
@@ -32,7 +31,7 @@ class GitHubTrendingAdapter:
 
     adapter_type = "github_trending"
 
-    def fetch(self, config: dict[str, Any], client: httpx.Client) -> list[dict[str, Any]]:
+    def fetch(self, config: dict[str, Any], client: HTTPConfig) -> list[dict[str, Any]]:
         languages = config.get("languages", ["python", "rust", "go", "zig", "typescript"])
 
         # 主路径: RSS
@@ -45,7 +44,7 @@ class GitHubTrendingAdapter:
         log.warning(f"    RSS 失败，降级到 scrape github.com/trending")
         return self._fetch_scrape(client, languages)
 
-    def _fetch_rss(self, client: httpx.Client, languages: list[str]) -> list[dict[str, Any]]:
+    def _fetch_rss(self, client: HTTPConfig, languages: list[str]) -> list[dict[str, Any]]:
         """通过 mshibanami 第三方 RSS 拉取。"""
         items = []
         seen: set[str] = set()
@@ -79,7 +78,7 @@ class GitHubTrendingAdapter:
 
         return items[:MAX_ITEMS]
 
-    def _fetch_scrape(self, client: httpx.Client, languages: list[str]) -> list[dict[str, Any]]:
+    def _fetch_scrape(self, client: HTTPConfig, languages: list[str]) -> list[dict[str, Any]]:
         """直接 scrape github.com/trending（降级方案）。"""
         items = []
         seen: set[str] = set()

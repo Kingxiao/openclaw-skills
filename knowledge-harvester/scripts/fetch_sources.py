@@ -9,8 +9,8 @@ Knowledge Harvester — Layer 1: 确定性采集（模块化 Adapter 架构）
 新增采集方式 = adapters/ 下新建 .py 文件 + 在 sources.yaml 添加条目
 零修改本文件
 
-依赖: feedparser, httpx, pyyaml
-安装: uv pip install feedparser httpx pyyaml
+依赖: feedparser, pyyaml
+安装: uv pip install feedparser pyyaml
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import httpx
 import yaml
 
 # 添加 scripts/ 到路径以支持 adapters 包导入
@@ -246,64 +245,59 @@ def run(
     }
 
     # ── 采集循环 ──
-    headers = {"User-Agent": USER_AGENT}
-    with httpx.Client(timeout=HTTP_TIMEOUT, headers=headers) as client:
-        for group in groups:
-            for src in sources_cfg.get(group, []):
-                name = src["name"]
-                src_type = src.get("type", "rss")
+    client = adapters.HTTPConfig(timeout=HTTP_TIMEOUT, user_agent=USER_AGENT)
+    for group in groups:
+        for src in sources_cfg.get(group, []):
+            name = src["name"]
+            src_type = src.get("type", "rss")
 
-                # 断点：跳过已完成
-                if name in ckpt.completed:
-                    log.info(f"  ⏭ 跳过(已完成): {name}")
-                    continue
+            # 断点：跳过已完成
+            if name in ckpt.completed:
+                log.info(f"  ⏭ 跳过(已完成): {name}")
+                continue
 
-                # 查找 adapter
-                adapter = adapters.get_adapter(src_type)
-                if not adapter:
-                    log.warning(f"  ⚠️ 未知 adapter type: {src_type} (源: {name})")
-                    stats["errors"] += 1
-                    continue
+            # 查找 adapter
+            adapter = adapters.get_adapter(src_type)
+            if not adapter:
+                log.warning(f"  ⚠️ 未知 adapter type: {src_type} (源: {name})")
+                stats["errors"] += 1
+                continue
 
-                log.info(f"  ▸ 采集: {name} [adapter={src_type}]")
+            log.info(f"  ▸ 采集: {name} [adapter={src_type}]")
 
-                try:
-                    items = adapter.fetch(src, client)
-                    stats["total_fetched"] += len(items)
+            try:
+                items = adapter.fetch(src, client)
+                stats["total_fetched"] += len(items)
 
-                    # 去重
-                    new_items = []
-                    for item in items:
-                        url = item.get("url", "")
-                        if dedup.is_seen(url):
-                            stats["duplicates"] += 1
-                            continue
-                        item["source_name"] = name
-                        item["source_group"] = group.replace("_sources", "")
-                        item["fetched_at"] = now.isoformat()
-                        new_items.append(item)
+                # 去重（仅内存去重，不写 harvest.jsonl —— 由 Layer 2 写入最终决定）
+                new_items = []
+                for item in items:
+                    url = item.get("url", "")
+                    if dedup.is_seen(url):
+                        stats["duplicates"] += 1
+                        continue
+                    item["source_name"] = name
+                    item["source_group"] = group.replace("_sources", "")
+                    item["fetched_at"] = now.isoformat()
+                    new_items.append(item)
 
-                        if not dry_run:
-                            dedup.record({
-                                "ts": now.isoformat(),
-                                "source": name, "url": url,
-                                "title": item["title"], "decision": "PENDING",
-                            })
-
-                    all_pending.extend(new_items)
-                    stats["pending"] = len(all_pending)
-
-                    # 保存断点（dry-run 不写，避免幽灵断点）
                     if not dry_run:
-                        ckpt.mark_done(name, len(items))
-                        ckpt.set_pending(all_pending)
+                        dedup.mark_seen(url)
 
-                    log.info(f"    → {len(items)} 条, {len(new_items)} 新")
+                all_pending.extend(new_items)
+                stats["pending"] = len(all_pending)
 
-                except Exception as e:
-                    stats["errors"] += 1
-                    ckpt.mark_failed(name, str(e))
-                    log.error(f"    ❌ 采集失败 [{name}]: {e}")
+                # 保存断点（dry-run 不写，避免幽灵断点）
+                if not dry_run:
+                    ckpt.mark_done(name, len(items))
+                    ckpt.set_pending(all_pending)
+
+                log.info(f"    → {len(items)} 条, {len(new_items)} 新")
+
+            except Exception as e:
+                stats["errors"] += 1
+                ckpt.mark_failed(name, str(e))
+                log.error(f"    ❌ 采集失败 [{name}]: {e}")
 
     # ── 输出 ──
     output = {
