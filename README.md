@@ -52,6 +52,37 @@ cp -r openclaw-assistant ~/.openclaw/skills/
 cp -r knowledge-harvester ~/.openclaw/skills/
 ```
 
+### 3. skill-forge
+
+生产级 Skill 创建元技能。
+
+**功能：**
+- 7 阶段创建流程
+- 三层渐进式披露架构
+- 复杂度分级 (Lite/Standard/Enterprise)
+- 50+ 项质量审计点
+- 21 条反模式检测
+
+**安装：**
+```bash
+cp -r skill-forge ~/.openclaw/skills/
+```
+
+### 4. skill-auditor
+
+Skill 审计工具 - 多维度质量保证检查。
+
+**功能：**
+- 7 个审计维度
+- 自动化验证脚本
+- 量化评分体系 (A+ ~ D)
+- 回归检测
+
+**安装：**
+```bash
+cp -r skill-auditor ~/.openclaw/skills/
+```
+
 ## 快速开始
 
 1. 克隆本仓库：
