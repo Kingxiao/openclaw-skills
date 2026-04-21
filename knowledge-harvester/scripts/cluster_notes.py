@@ -19,12 +19,12 @@ import re
 import sys
 import textwrap
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import yaml
 
-from config import SHANGHAI_TZ, NOTES_DIR, DRAFTS_DIR
+from config import SHANGHAI_TZ, NOTES_DIR, DRAFTS_DIR, LOGS_DIR, TAXONOMY_FILE
 from harvest_llm import LLMBackend, detect_backend
 
 CLUSTER_THRESHOLD = 3  # >= N 篇笔记 → 标记为成熟集群
@@ -232,6 +232,100 @@ def run(
     return report
 
 
+# ── Taxonomy 自适应增长 ──────────────────────────────────
+TAXONOMY_CANDIDATES = LOGS_DIR / "taxonomy_candidates.jsonl"
+PROMOTE_THRESHOLD = 3   # >= N 个不同来源笔记
+WINDOW_DAYS = 7         # 时间窗口
+
+
+def auto_grow_taxonomy():
+    """扫描候选池，将高频被拒 tag 自动提升为正式 taxonomy topic。"""
+    if not TAXONOMY_CANDIDATES.exists():
+        return
+
+    now = datetime.now(SHANGHAI_TZ)
+    cutoff = (now - timedelta(days=WINDOW_DAYS)).strftime("%Y-%m-%d")
+
+    # 1. 读取所有候选记录
+    candidates: list[dict] = []
+    with TAXONOMY_CANDIDATES.open(encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                candidates.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+    if not candidates:
+        return
+
+    # 2. 筛选 7 天窗口内的记录，按 (domain, tag) 分组统计唯一来源
+    recent: list[dict] = []
+    expired: list[dict] = []
+    for c in candidates:
+        if c.get("date", "") >= cutoff:
+            recent.append(c)
+        else:
+            expired.append(c)
+
+    # 按 (domain, tag) 统计唯一 source
+    groups: dict[tuple[str, str], set[str]] = {}
+    for c in recent:
+        key = (c.get("domain", ""), c.get("tag", ""))
+        source = c.get("source", "")
+        if key[0] and key[1]:
+            groups.setdefault(key, set()).add(source)
+
+    # 3. 找出达到阈值的候选
+    promoted: list[tuple[str, str]] = []
+    for (domain, tag), sources in groups.items():
+        if len(sources) >= PROMOTE_THRESHOLD:
+            promoted.append((domain, tag))
+
+    # 4. 更新 taxonomy.yaml
+    if promoted and TAXONOMY_FILE.exists():
+        try:
+            with TAXONOMY_FILE.open(encoding="utf-8") as f:
+                tax = yaml.safe_load(f)
+        except Exception as e:
+            log.warning(f"  taxonomy.yaml 加载失败: {e}")
+            tax = None
+
+        if tax and "domains" in tax:
+            actually_added = []
+            for domain, tag in promoted:
+                if domain not in tax["domains"]:
+                    continue
+                topics = tax["domains"][domain].get("topics", [])
+                if tag not in topics:
+                    topics.append(tag)
+                    tax["domains"][domain]["topics"] = topics
+                    actually_added.append((domain, tag))
+                    log.info(f"  taxonomy 自适应: 新增 '{tag}' → {domain}")
+
+            if actually_added:
+                with TAXONOMY_FILE.open("w", encoding="utf-8") as f:
+                    yaml.safe_dump(tax, f, default_flow_style=False, allow_unicode=True)
+                promoted = actually_added
+
+    # 5. 清理 JSONL：保留未过期且未被提升的记录
+    promoted_set = set(promoted)
+    remaining: list[dict] = []
+    for c in recent:
+        key = (c.get("domain", ""), c.get("tag", ""))
+        if key not in promoted_set:
+            remaining.append(c)
+
+    with TAXONOMY_CANDIDATES.open("w", encoding="utf-8") as f:
+        for c in remaining:
+            f.write(json.dumps(c, ensure_ascii=False) + "\n")
+
+    # 6. 报告
+    print(f"Taxonomy 自适应: 新增 {len(promoted)} 个 topics, 候选池 {len(remaining)} 条")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Knowledge Harvester Layer 3 — LLM 语义聚类"
@@ -260,6 +354,9 @@ def main():
     )
 
     run(threshold=args.threshold, backend=args.backend, dry_run=args.dry_run)
+
+    # Taxonomy 自适应增长
+    auto_grow_taxonomy()
 
 
 if __name__ == "__main__":

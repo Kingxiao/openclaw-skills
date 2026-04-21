@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
-import requests as httpx
+import httpx
 import yaml
 
 # 添加 scripts/ 到路径以支持 config 导入

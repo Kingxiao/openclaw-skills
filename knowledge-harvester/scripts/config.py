@@ -11,8 +11,34 @@ Knowledge Harvester — 统一路径与常量配置
 from __future__ import annotations
 
 import os
+import sys
 from datetime import timezone, timedelta
 from pathlib import Path
+
+# ── venv 自动发现 ────────────────────────────────────────
+# 按优先级查找 venv 的 site-packages，注入 sys.path，
+# 这样即使用系统 python3 运行也能找到 feedparser 等依赖。
+def _inject_venv_packages():
+    """自动发现项目 venv 并将其 site-packages 加入 sys.path。"""
+    _script_dir = Path(__file__).resolve().parent
+    _candidates = [
+        _script_dir / ".venv",                          # scripts/.venv (首选)
+        _script_dir.parent.parent.parent.parent / "knowledge" / ".venv",  # ~/.openclaw/knowledge/.venv
+    ]
+    for venv_dir in _candidates:
+        if not venv_dir.is_dir():
+            continue
+        # 查找 lib/python*/site-packages
+        lib_dir = venv_dir / "lib"
+        if not lib_dir.is_dir():
+            continue
+        for pydir in sorted(lib_dir.iterdir(), reverse=True):
+            sp = pydir / "site-packages"
+            if sp.is_dir() and str(sp) not in sys.path:
+                sys.path.insert(0, str(sp))
+                return
+
+_inject_venv_packages()
 
 # ── 时区 ──────────────────────────────────────────────────
 SHANGHAI_TZ = timezone(timedelta(hours=8))

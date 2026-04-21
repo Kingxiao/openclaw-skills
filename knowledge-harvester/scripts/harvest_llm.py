@@ -345,6 +345,186 @@ def load_taxonomy() -> str:
         return "ai, science, business, economics, engineering, philosophy"
 
 
+# ── Taxonomy 验证 ─────────────────────────────────────────
+# 近似映射表：常见错误 domain → 正确 domain
+_DOMAIN_ALIASES: dict[str, str] = {
+    "programming": "engineering",
+    "software": "engineering",
+    "cs": "engineering",
+    "computer-science": "engineering",
+    "ml": "ai",
+    "machine-learning": "ai",
+    "deep-learning": "ai",
+    "nlp": "ai",
+    "math": "science",
+    "psychology": "science",
+    "neuroscience": "science",
+    "startup": "business",
+    "startups": "business",
+    "finance": "economics",
+    "fintech": "economics",
+    "ethics": "philosophy",
+}
+
+
+def validate_note_taxonomy(content: str, filepath_hint: str = "") -> str:
+    """验证并修正笔记 frontmatter 中的 domain/tags，使其符合 taxonomy.yaml。
+
+    1. 加载 taxonomy.yaml 获取合法 domain 和 topics
+    2. 检查 frontmatter 中的 domain 是否合法，不合法则映射到最近的
+    3. 检查 tags 是否在该 domain 的 topics 中，不合法则替换为最近的
+    4. 返回修正后的完整 content 字符串
+    """
+    # 加载 taxonomy
+    if not TAXONOMY_FILE.exists():
+        return content
+    try:
+        with TAXONOMY_FILE.open(encoding="utf-8") as f:
+            tax = yaml.safe_load(f)
+    except Exception:
+        return content
+
+    domains_data = tax.get("domains", {})
+    if not domains_data:
+        return content
+
+    valid_domains = set(domains_data.keys())
+    domain_topics: dict[str, list[str]] = {
+        d: info.get("topics", []) for d, info in domains_data.items()
+    }
+
+    # 解析 frontmatter
+    fm_match = re.match(r'^---\s*\n([\s\S]*?)\n---', content)
+    if not fm_match:
+        return content
+
+    fm_text = fm_match.group(1)
+    try:
+        fm = yaml.safe_load(fm_text)
+    except Exception:
+        return content
+
+    if not isinstance(fm, dict):
+        return content
+
+    changed = False
+    note_domain = fm.get("domain", "")
+
+    # 验证 domain
+    if note_domain not in valid_domains:
+        mapped = _DOMAIN_ALIASES.get(note_domain.lower(), "")
+        if mapped and mapped in valid_domains:
+            log.info(f"    taxonomy 修正: domain '{note_domain}' → '{mapped}'")
+            fm["domain"] = mapped
+            note_domain = mapped
+            changed = True
+        else:
+            # 默认回退到 ai
+            log.warning(f"    taxonomy 修正: 未知 domain '{note_domain}' → 'ai'")
+            fm["domain"] = "ai"
+            note_domain = "ai"
+            changed = True
+
+    # 验证 tags
+    valid_topics = set(domain_topics.get(note_domain, []))
+    all_topics = set()
+    for topics_list in domain_topics.values():
+        all_topics.update(topics_list)
+
+    tags = fm.get("tags", [])
+    if isinstance(tags, list) and valid_topics:
+        corrected_tags = []
+        for tag in tags:
+            if tag in valid_topics:
+                corrected_tags.append(tag)
+            elif tag in all_topics:
+                # tag 存在但属于其他 domain，保留（LLM 可能有交叉意图）
+                # 但替换为当前 domain 中最接近的
+                best = _find_closest_tag(tag, valid_topics)
+                if best:
+                    log.info(f"    taxonomy 修正: tag '{tag}' → '{best}' (domain={note_domain})")
+                    corrected_tags.append(best)
+                    changed = True
+                else:
+                    corrected_tags.append(tag)
+            else:
+                # 完全未知 tag，找当前 domain 中最接近的
+                best = _find_closest_tag(tag, valid_topics)
+                if best:
+                    log.info(f"    taxonomy 修正: tag '{tag}' → '{best}'")
+                    corrected_tags.append(best)
+                    changed = True
+                else:
+                    log.warning(f"    taxonomy 修正: 无法映射 tag '{tag}'，移除")
+                    _record_taxonomy_candidate(tag, note_domain, filepath_hint)
+                    changed = True
+
+        if corrected_tags:
+            fm["tags"] = corrected_tags
+        elif valid_topics:
+            # 所有 tags 都被移除，使用 domain 的第一个 topic
+            fm["tags"] = [domain_topics[note_domain][0]]
+            changed = True
+
+    if not changed:
+        return content
+
+    # 重建 frontmatter
+    new_fm_lines = ["---"]
+    for key, val in fm.items():
+        if key == "tags":
+            tag_str = ", ".join(val) if isinstance(val, list) else str(val)
+            new_fm_lines.append(f"tags: [{tag_str}]")
+        elif isinstance(val, str) and ('"' in val or "'" in val or ":" in val):
+            new_fm_lines.append(f'{key}: "{val}"')
+        elif isinstance(val, str):
+            new_fm_lines.append(f'{key}: "{val}"')
+        else:
+            new_fm_lines.append(f"{key}: {val}")
+    new_fm_lines.append("---")
+    new_fm = "\n".join(new_fm_lines)
+
+    # 替换原 frontmatter
+    body_after_fm = content[fm_match.end():]
+    return new_fm + body_after_fm
+
+
+def _record_taxonomy_candidate(tag: str, domain: str, source_note: str):
+    """将被拒绝的 tag 追加到 taxonomy_candidates.jsonl 候选池。"""
+    TAXONOMY_CANDIDATES = LOGS_DIR / "taxonomy_candidates.jsonl"
+    TAXONOMY_CANDIDATES.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "tag": tag,
+        "domain": domain,
+        "date": datetime.now(SHANGHAI_TZ).strftime("%Y-%m-%d"),
+        "source": source_note,
+    }
+    with TAXONOMY_CANDIDATES.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _find_closest_tag(tag: str, valid_tags: set[str]) -> str | None:
+    """简单的字符串相似度匹配，找最接近的合法 tag。"""
+    tag_lower = tag.lower().replace("_", "-").replace(" ", "-")
+
+    # 精确匹配（大小写/分隔符不同）
+    for vt in valid_tags:
+        if vt.lower() == tag_lower:
+            return vt
+
+    # 子串匹配
+    for vt in valid_tags:
+        if tag_lower in vt or vt in tag_lower:
+            return vt
+
+    # 首字匹配
+    for vt in valid_tags:
+        if vt.startswith(tag_lower[:3]) or tag_lower.startswith(vt[:3]):
+            return vt
+
+    return None
+
+
 # ── 深评 + 笔记生成 (Stage 2) ────────────────────────────
 NOTE_PROMPT_TEMPLATE = textwrap.dedent("""\
 你是一个知识提取专家。请基于以下原文内容生成一篇结构化的知识笔记。
@@ -512,6 +692,9 @@ def generate_note(
             log.error(f"    笔记格式无法修复，跳过: {filename}")
             return None
 
+    # 验证并修正 taxonomy 合规性
+    content = validate_note_taxonomy(content, filepath_hint=filename)
+
     NOTES_DIR.mkdir(parents=True, exist_ok=True)
     filepath.write_text(content + "\n", encoding="utf-8")
     log.info(f"    ✅ 已写入: {filepath}")
@@ -628,6 +811,9 @@ def generate_notes_batch(
                     result_path = generate_note(item, backend, dry_run)
                     results[idx] = result_path
                     continue
+
+            # 验证并修正 taxonomy 合规性
+            content = validate_note_taxonomy(content, filepath_hint=filename)
 
             filepath.write_text(content + "\n", encoding="utf-8")
             log.info(f"    ✅ 已写入: {filepath}")

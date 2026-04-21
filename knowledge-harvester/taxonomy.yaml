@@ -1,74 +1,57 @@
-# ============================================
-# Knowledge Harvester — 知识分类体系 (Taxonomy)
-# ============================================
-# 本文件定义了统一的标签词表，所有 LLM 生成的笔记必须从中选取标签。
-# 目的：消除 LLM 自由发挥导致的标签碎片化（如 rl / reinforcement-learning / 强化学习）
-#
-# 结构：domain → topics → tags
-# - domain: 一级领域（笔记必须选一个）
-# - topics: 二级主题（笔记选 1-2 个）
-# - 添加新标签：在对应 domain 的 topics 列表末尾追加即可
-#
-# 最后更新: 2026-03-12
-
 domains:
-
   ai:
-    description: "人工智能、机器学习、深度学习"
+    description: 人工智能、机器学习、深度学习
     topics:
-      - llm                    # 大语言模型（架构、训练、推理）
-      - agents                 # AI Agent、工具调用、多步推理
-      - multimodal             # 多模态模型（视觉-语言、音频等）
-      - reinforcement-learning # RL、RLHF、GRPO、reward modeling
-      - training               # 训练方法（微调、预训练、数据）
-      - inference              # 推理优化（量化、蒸馏、加速）
-      - alignment              # 对齐、安全、可控性
-      - retrieval              # RAG、搜索增强、知识库
-      - code-generation        # AI 编程、代码生成、Copilot
-      - computer-vision        # CV、图像生成、3D、视频
-      - speech                 # 语音识别、TTS、音频处理
-      - robotics               # 机器人、具身智能
-      - ai-infra               # 训练框架、分布式、MLOps
-
-  science:
-    description: "自然科学与数学"
-    topics:
-      - mathematics            # 数学、统计、概率
-      - physics                # 物理学
-      - biology                # 生物学、基因、神经科学
-      - cognitive-science      # 认知科学、心理学
-      - climate                # 气候、能源、可持续
-
+    - llm
+    - agents
+    - multimodal
+    - reinforcement-learning
+    - training
+    - inference
+    - alignment
+    - retrieval
+    - code-generation
+    - computer-vision
+    - speech
+    - robotics
+    - ai-infra
   business:
-    description: "商业、创业、管理"
+    description: 商业、创业、管理
     topics:
-      - startups               # 创业、融资、商业模式
-      - product                # 产品管理、用户体验
-      - growth                 # 增长、营销、PMF
-      - management             # 管理、团队、领导力
-      - digital-transformation # 数字化转型、企业 AI
-
+    - startups
+    - product
+    - growth
+    - management
+    - digital-transformation
   economics:
-    description: "经济学、金融、政策"
+    description: 经济学、金融、政策
     topics:
-      - macro                  # 宏观经济、GDP、利率
-      - markets                # 资本市场、投资
-      - policy                 # 经济政策、监管
-      - fintech                # 金融科技、支付、DeFi
-
+    - macro
+    - markets
+    - policy
+    - fintech
   engineering:
-    description: "软件工程与系统"
+    description: 软件工程与系统
     topics:
-      - systems                # 分布式系统、数据库、基础设施
-      - open-source            # 开源项目、工具、框架
-      - programming-languages  # 编程语言（Rust、Zig、Go 等）
-      - devtools               # 开发工具、CLI、IDE
-      - performance            # 性能优化、基准测试
-
+    - systems
+    - open-source
+    - programming-languages
+    - devtools
+    - performance
+    - dsl
+    - xml
   philosophy:
-    description: "哲学、认识论、伦理"
+    description: 哲学、认识论、伦理
     topics:
-      - epistemology           # 认识论、知识结构
-      - ethics                 # 伦理学、AI 伦理
-      - rationality            # 理性主义、决策理论
-      - culture                # 文化、社会、人文
+    - epistemology
+    - ethics
+    - rationality
+    - culture
+  science:
+    description: 自然科学与数学
+    topics:
+    - mathematics
+    - physics
+    - biology
+    - cognitive-science
+    - climate

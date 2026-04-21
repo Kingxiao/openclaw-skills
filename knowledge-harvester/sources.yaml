@@ -1,5 +1,5 @@
 # ============================================
-# OpenClaw Knowledge Harvester v2.3 — 信息源配置
+# OpenClaw Knowledge Harvester v3.0 — 信息源配置
 # ============================================
 # type: 对应 scripts/adapters/ 下的 adapter 模块名
 #   rss             → adapters/rss.py (通用 RSS/Atom)
@@ -11,14 +11,27 @@
 #
 # enabled: false 可禁用某个源（默认 true）
 # auto_discovered: true 标记由 discover_source.py 自动添加的源
-# 最后更新: 2026-03-12
+# 最后更新: 2026-03-18 (v3.0 全学科扩展)
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 日源 (daily) — 每天采集
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 daily_sources:
+
+  # ── AI / ML ──────────────────────────────────
   - name: "Hugging Face Daily Papers"
     url: "https://papers.takara.ai/api/feed"
     type: rss
     categories: [ai, machine_learning, deep_learning]
     priority: 1
+
+  - name: "Papers with Code Trending"
+    url: "https://paperswithcode.com/trending"
+    type: web_scrape
+    categories: [ai, implementation, benchmarks]
+    priority: 1
+    note: "正则匹配 /papers/ 链接"
 
   - name: "Hacker News Best"
     type: hn_api
@@ -27,6 +40,13 @@ daily_sources:
     categories: [technology, startups, engineering]
     priority: 1
 
+  - name: "GitHub Trending"
+    type: github_trending
+    languages: [rust, zig, go, python, typescript]
+    categories: [open_source, tools, frameworks]
+    priority: 2
+
+  # ── arXiv 日频（高流量核心方向）──────────────
   - name: "arXiv CS.AI"
     url: "https://export.arxiv.org/rss/cs.AI"
     type: rss
@@ -41,12 +61,21 @@ daily_sources:
     priority: 2
     filter: "聚焦 reasoning, alignment, agents, multimodal 方向"
 
-  - name: "GitHub Trending"
-    type: github_trending
-    languages: [rust, zig, go, python, typescript]
-    categories: [open_source, tools, frameworks]
+  - name: "arXiv CS.LG"
+    url: "https://export.arxiv.org/rss/cs.LG"
+    type: rss
+    categories: [machine_learning, optimization, generalization]
     priority: 2
+    filter: "聚焦新训练范式、新优化方法、SOTA 突破"
 
+  - name: "arXiv CS.MA"
+    url: "https://export.arxiv.org/rss/cs.MA"
+    type: rss
+    categories: [multi_agent, coordination, game_theory]
+    priority: 1
+    filter: "Multi-Agent 系统、协作、博弈"
+
+  # ── 社区 ─────────────────────────────────────
   - name: "Reddit r/MachineLearning"
     url: "https://www.reddit.com/r/MachineLearning/.rss"
     type: rss
@@ -59,19 +88,255 @@ daily_sources:
     categories: [ai, local_inference, community]
     priority: 2
 
-  - name: "Papers with Code Trending"
-    url: "https://paperswithcode.com/trending"
-    type: web_scrape
-    categories: [ai, implementation, benchmarks]
+  # ── AI 企业博客 ──────────────────────────────
+  - name: "Google DeepMind Blog"
+    url: "https://deepmind.google/blog/rss.xml"
+    type: rss
+    categories: [ai, research, frontier]
     priority: 1
-    note: "正则匹配 /papers/ 链接（v2.2 修复）"
+
+  - name: "Google Research Blog"
+    url: "https://feeds.feedburner.com/blogspot/gJZg"
+    type: rss
+    categories: [ai, research, systems]
+    priority: 2
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 周源 (weekly) — 每周采集
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 weekly_sources:
-  - name: "Quanta Magazine"
-    url: "https://www.quantamagazine.org/feed/"
+
+  # ── arXiv 周频（跨学科，量大但不需要日频追踪）──
+
+  # 计算机科学扩展
+  - name: "arXiv CS.RO"
+    url: "https://export.arxiv.org/rss/cs.RO"
     type: rss
-    categories: [mathematics, physics, computer_science, biology]
+    categories: [robotics, embodied_ai, control]
+    priority: 2
+    filter: "机器人学习、具身智能、人机交互"
+
+  - name: "arXiv CS.SE"
+    url: "https://export.arxiv.org/rss/cs.SE"
+    type: rss
+    categories: [software_engineering, dev_tools, testing]
+    priority: 3
+    filter: "AI 辅助开发、自动化测试、Agent 工程"
+
+  - name: "arXiv CS.DC"
+    url: "https://export.arxiv.org/rss/cs.DC"
+    type: rss
+    categories: [distributed_systems, parallel_computing]
+    priority: 3
+    filter: "分布式 Agent、大规模并行、共识算法"
+
+  - name: "arXiv CS.CR"
+    url: "https://export.arxiv.org/rss/cs.CR"
+    type: rss
+    categories: [security, privacy, cryptography]
+    priority: 3
+    filter: "AI 安全、对抗攻击、隐私计算"
+
+  - name: "arXiv CS.HC"
+    url: "https://export.arxiv.org/rss/cs.HC"
+    type: rss
+    categories: [hci, interaction_design, accessibility]
+    priority: 3
+    filter: "人机交互新范式、Agent UI、自然交互"
+
+  - name: "arXiv CS.SY"
+    url: "https://export.arxiv.org/rss/cs.SY"
+    type: rss
+    categories: [systems_control, automation, cyber_physical]
+    priority: 2
+    filter: "控制理论、智能制造控制、CPS"
+
+  - name: "arXiv stat.ML"
+    url: "https://export.arxiv.org/rss/stat.ML"
+    type: rss
+    categories: [statistics, ml_theory, bayesian]
+    priority: 3
+    filter: "统计学习理论突破"
+
+  # 数学与优化
+  - name: "arXiv math.OC"
+    url: "https://export.arxiv.org/rss/math.OC"
+    type: rss
+    categories: [optimization, control_theory, operations_research]
+    priority: 3
+    filter: "优化算法、最优控制、运筹学"
+
+  # 材料科学
+  - name: "arXiv cond-mat.mtrl-sci"
+    url: "https://export.arxiv.org/rss/cond-mat.mtrl-sci"
+    type: rss
+    categories: [materials_science, condensed_matter, nanotechnology]
+    priority: 2
+    filter: "新材料发现、AI 材料设计、计算材料学"
+
+  # 大气科学
+  - name: "arXiv physics.ao-ph"
+    url: "https://export.arxiv.org/rss/physics.ao-ph"
+    type: rss
+    categories: [atmospheric_science, climate, oceanography]
+    priority: 3
+    filter: "气候模型、AI 天气预报、大气动力学"
+
+  # 天文学
+  - name: "arXiv astro-ph"
+    url: "https://export.arxiv.org/rss/astro-ph"
+    type: rss
+    categories: [astrophysics, cosmology, exoplanets]
+    priority: 3
+    filter: "重大发现、新观测方法、AI 在天文学中的应用"
+
+  # 脑科学 / 神经科学
+  - name: "arXiv q-bio.NC"
+    url: "https://export.arxiv.org/rss/q-bio.NC"
+    type: rss
+    categories: [neuroscience, brain_science, computational_neuro]
+    priority: 2
+    filter: "计算神经科学、脑机接口、认知模型"
+
+  # 经济学
+  - name: "arXiv econ.GN"
+    url: "https://export.arxiv.org/rss/econ.GN"
+    type: rss
+    categories: [economics, econometrics, policy]
+    priority: 3
+    filter: "经济理论突破、AI 经济学、政策分析"
+
+  # 应用物理 / 力学
+  - name: "arXiv physics.app-ph"
+    url: "https://export.arxiv.org/rss/physics.app-ph"
+    type: rss
+    categories: [applied_physics, devices, manufacturing]
+    priority: 3
+    filter: "先进制造、新型器件、工业应用"
+
+  - name: "arXiv physics.flu-dyn"
+    url: "https://export.arxiv.org/rss/physics.flu-dyn"
+    type: rss
+    categories: [fluid_dynamics, mechanics, turbulence]
+    priority: 3
+    filter: "流体力学、计算流体、AI 仿真"
+
+  # 非线性科学 / 复杂系统
+  - name: "arXiv nlin.AO"
+    url: "https://export.arxiv.org/rss/nlin.AO"
+    type: rss
+    categories: [complex_systems, self_organization, emergence]
+    priority: 2
+    filter: "自组织系统、涌现行为、复杂适应系统"
+
+  # ── 综合科学期刊 ────────────────────────────
+
+  - name: "Nature Latest Research"
+    url: "http://feeds.nature.com/nature/rss/current"
+    type: rss
+    categories: [science, biology, physics, chemistry]
     priority: 1
+
+  - name: "Nature Materials"
+    url: "http://feeds.nature.com/nmat/rss/current"
+    type: rss
+    categories: [materials_science, nanotechnology, engineering]
+    priority: 1
+
+  - name: "Nature Astronomy"
+    url: "http://feeds.nature.com/natastron/rss/current"
+    type: rss
+    categories: [astronomy, cosmology, space_science]
+    priority: 2
+
+  - name: "Nature Neuroscience"
+    url: "https://www.nature.com/neuro.rss"
+    type: rss
+    categories: [neuroscience, brain_science, cognition]
+    priority: 1
+
+  - name: "Science News"
+    url: "https://www.science.org/rss/news_current.xml"
+    type: rss
+    categories: [science, policy, breakthrough]
+    priority: 1
+
+  - name: "PNAS"
+    url: "https://www.pnas.org/action/showFeed?type=etoc&feed=rss&jc=pnas"
+    type: rss
+    categories: [multidisciplinary, biology, social_science, physical_science]
+    priority: 2
+
+  - name: "ScienceDaily"
+    url: "https://www.sciencedaily.com/rss/all.xml"
+    type: rss
+    categories: [science, technology, health, environment]
+    priority: 2
+    filter: "重大发现、跨学科突破"
+
+  - name: "MIT News"
+    url: "https://news.mit.edu/rss/feed"
+    type: rss
+    categories: [technology, research, innovation]
+    priority: 2
+
+  - name: "AAS Nova"
+    url: "https://aasnova.org/feed/"
+    type: rss
+    categories: [astronomy, astrophysics, space]
+    priority: 2
+    note: "美国天文学会研究亮点"
+
+  # ── 工程与制造 ───────────────────────────────
+
+  - name: "IEEE Spectrum"
+    url: "https://spectrum.ieee.org/feeds/feed.rss"
+    type: rss
+    categories: [engineering, electronics, robotics, manufacturing]
+    priority: 1
+
+  - name: "MIT Technology Review"
+    url: "https://www.technologyreview.com/feed/"
+    type: rss
+    categories: [technology, ai, biotech, climate, manufacturing]
+    priority: 1
+
+  - name: "ACM Queue"
+    url: "https://queue.acm.org/rss/feeds/queuecontent.xml"
+    type: rss
+    categories: [software_engineering, systems, architecture]
+    priority: 2
+
+  # ── 哲学与认知科学 ──────────────────────────
+
+  - name: "Aeon"
+    url: "https://aeon.co/feed.rss"
+    type: rss
+    categories: [philosophy, cognitive_science, culture, ethics]
+    priority: 1
+    note: "feed.xml 被 Vercel 反爬 429，改用 feed.rss"
+
+  - name: "Daily Nous"
+    url: "https://dailynous.com/feed/"
+    type: rss
+    categories: [philosophy, academia, ethics, logic]
+    priority: 2
+    note: "哲学学术社区新闻与讨论"
+
+  - name: "Nautilus"
+    url: "https://nautil.us/feed/"
+    type: rss
+    categories: [science, philosophy, culture, interdisciplinary]
+    priority: 1
+    note: "跨学科深度长文"
+
+  - name: "Ribbonfarm"
+    url: "https://www.ribbonfarm.com/feed/"
+    type: rss
+    categories: [philosophy, systems_thinking, strategy, culture]
+    priority: 2
+    note: "系统思维、组织理论、元认知"
 
   - name: "LessWrong"
     url: "https://www.lesswrong.com/feed.xml"
@@ -79,42 +344,57 @@ weekly_sources:
     categories: [rationality, cognitive_science, ai_safety, epistemology]
     priority: 1
 
-  - name: "First Round Review"
-    url: "https://review.firstround.com"
-    type: ghost_api
-    ghost_api_key_env: "GHOST_FIRSTROUND_KEY"
-    categories: [startups, management, product, growth]
-    priority: 1
-    note: "Ghost Content API。需设置 GHOST_FIRSTROUND_KEY 环境变量"
+  # ── 经济学与政治经济学 ──────────────────────
 
-  - name: "Matt Levine - Money Stuff"
-    url: "https://www.bloomberg.com/account/newsletters/money-stuff"
+  - name: "VoxEU / CEPR"
+    url: "https://voxeu.org/rss.xml"
     type: rss
-    categories: [finance, markets, corporate, humor]
+    categories: [economics, policy, trade, development]
     priority: 1
-    enabled: false
-    note: "Bloomberg 全面封锁 (RSS 404, 页面 403)。建议用户邮件订阅: bloomberg.com/account/newsletters/money-stuff"
+    note: "欧洲经济政策研究中心，顶级经济学家专栏"
 
-  - name: "FRED Economic Data"
+  - name: "CEPR Policy Portal"
+    url: "https://cepr.org/rss.xml"
+    type: rss
+    categories: [economics, policy, political_economy]
+    priority: 2
+
+  - name: "Project Syndicate"
+    url: "https://www.project-syndicate.org/rss"
+    type: rss
+    categories: [political_economy, global_affairs, economics, policy]
+    priority: 1
+    note: "全球顶级经济学家/政治家专栏"
+
+  - name: "Marginal Revolution"
+    url: "https://marginalrevolution.com/feed"
+    type: rss
+    categories: [economics, libertarian, culture, technology]
+    priority: 1
+    note: "Tyler Cowen & Alex Tabarrok，经济学最有影响力的博客之一"
+
+  - name: "NBER Working Papers"
+    url: "https://www.nber.org/rss/new.xml"
+    type: rss
+    categories: [economics, policy, finance, labor]
+    priority: 2
+
+  - name: "FRED Blog"
+    url: "https://fredblog.stlouisfed.org/feed/"
+    type: rss
+    categories: [economics, macro, data, policy]
+    priority: 2
+    note: "FRED 官方博客，经济数据分析文章。无需 API key"
+
+  - name: "FRED Economic Data (API)"
     type: fred_api
     api_key_env: "FRED_API_KEY"
     series_ids: [GDP, UNRATE, CPIAUCSL, DFF, T10Y2Y]
     categories: [economics, macro, data, policy]
-    priority: 2
-    note: "需设置 FRED_API_KEY 环境变量，未设置则跳过"
+    priority: 3
+    note: "可选。需设置 FRED_API_KEY 环境变量，未设置则跳过"
 
-  - name: "Nature Latest Research"
-    url: "http://feeds.nature.com/nature/rss/current"
-    type: rss
-    categories: [science, biology, physics, chemistry]
-    priority: 2
-
-  - name: "Aeon"
-    url: "https://aeon.co/feed.rss"
-    type: rss
-    categories: [philosophy, cognitive_science, culture, ethics]
-    priority: 2
-    note: "feed.xml 被 Vercel 反爬 429，改用 feed.rss"
+  # ── 商业与创业 ───────────────────────────────
 
   - name: "Stratechery (Free Weekly)"
     url: "https://stratechery.com/feed/"
@@ -124,10 +404,33 @@ weekly_sources:
     note: "免费层仅周刊文章"
 
   - name: "a16z Blog"
-    url: "https://a16z.com/feed/"
+    url: "https://www.a16z.news/feed"
     type: rss
     categories: [venture_capital, technology_trends]
     priority: 2
+    note: "原 a16z.com/feed/ 已 404，迁移到 a16z.news (Substack)。2026-03-18 更新"
+
+  - name: "Paul Graham Essays"
+    url: "http://www.aaronsw.com/2002/feeds/pgessays.rss"
+    type: rss
+    categories: [startups, philosophy, technology, essays]
+    priority: 1
+    note: "Aaron Swartz scraped feed of PG essays"
+
+  - name: "Indie Hackers (Podcast)"
+    url: "https://feeds.backtracks.fm/indiehackers/indie-hackers-podcast/feed.xml"
+    type: rss
+    categories: [indie_business, solo_founder, bootstrapping]
+    priority: 2
+    enabled: false
+    note: "IH 主站无 RSS，Backtracks TLS 不稳定。暂禁用"
+
+  - name: "First Round Review"
+    url: "https://review.firstround.com"
+    type: web_scrape
+    categories: [startups, management, product, growth]
+    priority: 1
+    note: "Ghost 站点禁用了公开 RSS，用 web_scrape 抓取首页文章列表"
 
   - name: "MIT Sloan Management Review"
     url: "https://sloanreview.mit.edu/feed/"
@@ -135,11 +438,208 @@ weekly_sources:
     categories: [management, digital_transformation, leadership, ai_strategy]
     priority: 2
 
-  - name: "NBER Working Papers"
-    url: "https://www.nber.org/rss/new.xml"
+  - name: "Matt Levine - Money Stuff"
+    url: "https://www.bloomberg.com/account/newsletters/money-stuff"
     type: rss
-    categories: [economics, policy, finance, labor]
+    categories: [finance, markets, corporate, humor]
+    priority: 1
+    enabled: false
+    note: "Bloomberg 全面封锁。建议邮件订阅"
+
+  # ── Rust / Zig / 系统编程 ───────────────────
+
+  - name: "This Week in Rust"
+    url: "https://this-week-in-rust.org/atom.xml"
+    type: rss
+    categories: [rust, systems_programming, community]
+    priority: 1
+
+  - name: "Zig News"
+    url: "https://ziglang.org/news/index.xml"
+    type: rss
+    categories: [zig, systems_programming, compiler]
+    priority: 1
+
+  # ── 综合科技媒体 ────────────────────────────
+
+  - name: "Quanta Magazine"
+    url: "https://www.quantamagazine.org/feed/"
+    type: rss
+    categories: [mathematics, physics, computer_science, biology]
+    priority: 1
+
+  - name: "BBC Science"
+    url: "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"
+    type: rss
+    categories: [science, environment, climate, space]
     priority: 2
+
+  - name: "The Gradient"
+    url: "https://thegradient.pub/rss/"
+    type: rss
+    categories: [ai, ml_research, analysis]
+    priority: 1
+    note: "AI 研究深度分析，质量极高"
+
+  # ── 生物学 / 生命科学 ─────────────────────
+
+  - name: "PLOS Biology"
+    url: "https://journals.plos.org/plosbiology/feed/atom"
+    type: rss
+    categories: [biology, genetics, evolution, ecology]
+    priority: 2
+    note: "开放获取，生物学综合顶刊"
+
+  - name: "eLife"
+    url: "https://elifesciences.org/rss/recent.xml"
+    type: rss
+    categories: [biology, biomedical, neuroscience, genetics]
+    priority: 2
+    note: "开放获取，生命科学前沿"
+
+  # ── 微生物学 ─────────────────────────────
+
+  - name: "Nature Microbiology"
+    url: "https://www.nature.com/nmicrobiol.rss"
+    type: rss
+    categories: [microbiology, virology, bacteriology, antimicrobial]
+    priority: 2
+
+  - name: "mBio (ASM)"
+    url: "https://journals.asm.org/action/showFeed?type=etoc&feed=rss&jc=mbio"
+    type: rss
+    categories: [microbiology, infectious_disease, microbiome]
+    priority: 3
+    note: "美国微生物学会旗舰期刊"
+
+  # ── 芯片 / 半导体 ───────────────────────
+
+  - name: "Semiconductor Engineering"
+    url: "https://semiengineering.com/feed/"
+    type: rss
+    categories: [semiconductor, chip_design, eda, manufacturing]
+    priority: 1
+    note: "半导体行业最深度的技术媒体"
+
+  - name: "AnandTech"
+    url: "https://www.anandtech.com/rss/"
+    type: rss
+    categories: [hardware, cpu, gpu, benchmark, chip]
+    priority: 2
+    note: "硬件深度评测与架构分析"
+
+  # ── 嵌入式 / 单片机 / 传感器 / 硬件 ────
+
+  - name: "Hackaday"
+    url: "https://hackaday.com/feed/"
+    type: rss
+    categories: [embedded, hardware, diy, sensors, maker]
+    priority: 1
+    note: "硬件黑客社区，覆盖嵌入式/传感器/单片机/3D打印"
+
+  - name: "Adafruit Blog"
+    url: "https://blog.adafruit.com/feed/"
+    type: rss
+    categories: [embedded, arduino, raspberry_pi, sensors, maker]
+    priority: 2
+    note: "开源硬件社区，教程+新品+项目展示"
+
+  # ── 产品 / 交互设计 ─────────────────────
+
+  - name: "UX Collective"
+    url: "https://uxdesign.cc/feed"
+    type: rss
+    categories: [ux_design, interaction_design, product_design]
+    priority: 1
+    note: "最大的 UX 设计社区 (Medium)"
+
+  - name: "Nielsen Norman Group"
+    url: "https://www.nngroup.com/feed/rss/"
+    type: rss
+    categories: [ux_research, usability, interaction_design]
+    priority: 1
+    note: "UX 研究权威，Jakob Nielsen 创立"
+
+  - name: "A List Apart"
+    url: "https://alistapart.com/main/feed/"
+    type: rss
+    categories: [web_design, accessibility, standards, ux]
+    priority: 2
+    note: "Web 设计与标准的经典刊物"
+
+  - name: "UX Planet"
+    url: "https://uxplanet.org/feed"
+    type: rss
+    categories: [ux_design, ui_design, product_design]
+    priority: 2
+
+  # ── 投融资 / VC ──────────────────────────
+
+  - name: "TechCrunch"
+    url: "https://techcrunch.com/feed/"
+    type: rss
+    categories: [startups, venture_capital, funding, technology]
+    priority: 1
+
+  - name: "Crunchbase News"
+    url: "https://news.crunchbase.com/feed/"
+    type: rss
+    categories: [venture_capital, funding, m_and_a, startups]
+    priority: 2
+
+  # ── 创业 ─────────────────────────────────
+
+  - name: "Y Combinator Blog"
+    url: "https://www.ycombinator.com/blog/rss/"
+    type: rss
+    categories: [startups, yc, founder, growth]
+    priority: 1
+
+  # ── 开源社区 ─────────────────────────────
+
+  - name: "DEV Community"
+    url: "https://dev.to/feed"
+    type: rss
+    categories: [open_source, programming, community, devops]
+    priority: 2
+
+  - name: "Opensource.com"
+    url: "https://opensource.com/feed"
+    type: rss
+    categories: [open_source, linux, community, culture]
+    priority: 2
+
+  - name: "GitHub Blog"
+    url: "https://github.blog/feed/"
+    type: rss
+    categories: [open_source, devtools, github, community]
+    priority: 1
+
+  - name: "Linux Foundation Blog"
+    url: "https://www.linuxfoundation.org/blog/rss.xml"
+    type: rss
+    categories: [open_source, linux, cloud_native, governance]
+    priority: 2
+
+  # ── 能源 / 可持续 ───────────────────────
+
+  - name: "Nature Energy"
+    url: "https://www.nature.com/nenergy.rss"
+    type: rss
+    categories: [energy, sustainability, battery, solar, policy]
+    priority: 2
+
+  # ── 计算科学 ─────────────────────────────
+
+  - name: "Nature Computational Science"
+    url: "https://www.nature.com/natcomputsci.rss"
+    type: rss
+    categories: [computational_science, simulation, ai_for_science]
+    priority: 2
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 验证源 — 交叉验证用
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 verification_sources:
   - name: "Semantic Scholar"
@@ -149,7 +649,7 @@ verification_sources:
 
   - name: "Reddit"
     type: web_search
-    subreddits: [MachineLearning, LocalLLaMA, economics, philosophy]
+    subreddits: [MachineLearning, LocalLLaMA, economics, philosophy, physics, AskScience]
     use: "社区讨论热度验证"
 
   - name: "Web Search"

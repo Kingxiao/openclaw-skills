@@ -310,6 +310,27 @@ def run(
 
     if not dry_run:
         PENDING_ITEMS.parent.mkdir(parents=True, exist_ok=True)
+        # 合并现有 pending_items.json（保留 REQUEUED 等条目，避免覆盖丢失）
+        if PENDING_ITEMS.exists():
+            try:
+                with PENDING_ITEMS.open(encoding="utf-8") as f:
+                    existing_data = json.load(f)
+                existing_items = existing_data.get("items", [])
+                if existing_items:
+                    # 以 URL 去重：新条目优先
+                    new_urls = {item.get("url", "") for item in all_pending}
+                    preserved = [
+                        item for item in existing_items
+                        if item.get("url", "") and item.get("url", "") not in new_urls
+                    ]
+                    if preserved:
+                        all_pending.extend(preserved)
+                        output["items"] = all_pending
+                        output["stats"]["pending"] = len(all_pending)
+                        output["stats"]["preserved_from_existing"] = len(preserved)
+                        log.info(f"  📥 合并现有 {len(preserved)} 条 pending 条目")
+            except (json.JSONDecodeError, OSError) as e:
+                log.warning(f"  ⚠️ 读取现有 pending_items.json 失败，将覆盖: {e}")
         with PENDING_ITEMS.open("w", encoding="utf-8") as f:
             json.dump(output, f, ensure_ascii=False, indent=2)
         ckpt.clear()
