@@ -11,8 +11,9 @@
 ```
 openclaw-skills/
 ├── README.md
-├── openclaw-assistant/    # OpenClaw 全能辅助
-├── knowledge-harvester/    # 知识收割机
+├── openclaw-assistant/        # OpenClaw 全能辅助
+├── knowledge-harvester/       # 知识收割机
+├── feishu-schema-designer/    # 飞书多维表格应用架构师
 └── ...
 ```
 
@@ -81,6 +82,28 @@ Skill 审计工具 - 多维度质量保证检查。
 **安装：**
 ```bash
 cp -r skill-auditor ~/.openclaw/skills/
+```
+
+### 5. feishu-schema-designer
+
+飞书多维表格应用架构师工作流剧本 - 从原始资料/自然语言需求到真实可用的飞书 base 应用的端到端编排。
+
+**功能：**
+- 消化资料 → 推理设计 → 业务追问
+- 程序化校验 + 业务效果预览
+- 自动建表/字段/视图/工作流/仪表盘/表单/角色
+- 输出云文档使用手册
+
+**使用场景：**
+- 把零散资料/需求落地为飞书 base 应用
+- 搭建飞书 CRM / 项目管理 / 库存系统
+- 飞书多维表格应用架构设计
+
+> 设计与编排层，CRUD 执行委托给 lark-base / lark-doc 系列 skill。
+
+**安装：**
+```bash
+cp -r feishu-schema-designer ~/.openclaw/skills/
 ```
 
 ## 快速开始
