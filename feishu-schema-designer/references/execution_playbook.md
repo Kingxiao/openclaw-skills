@@ -1,6 +1,6 @@
 # Stage 5 执行编排手册
 
-> verified: 2026-04-16
+> verified: 2026-06-10（与 lark-base v1.2.2 协同）
 
 Stage 5 自动建 base 时，按本文严格遵循的依赖顺序、批量约束、回滚规则。
 
@@ -13,23 +13,23 @@ Stage 5 自动建 base 时，按本文严格遵循的依赖顺序、批量约束
 
 ## 预检清单（2026-04-16 实测加入，避免 Stage 5 中途阻塞）
 
-**0. 联网验证铁律（2026-04-17 新增，Stage 5 第一步）**
-- `lark-cli --version` 对比 https://github.com/larksuite/cli/releases 最新版；若版本差距 ≥1 minor → `npm install -g @larksuite/cli@latest`
-- WebSearch 飞书多维表格「常见上限」+「高级权限常见问题」官方帮助文档（不信赖 skill 本地 reference 可能过期的配额数字）
-- `lark-cli <domain> 2>&1` 穷举子命令，特别检查 `api`（通用透传，可调未封装的 OpenAPI）+ `drive permission.members` 等协作/分享相关
-- 没做这 3 步就进 Stage 5 = 撞错会踩 v1.0.13 实测已修的坑 + 凭过期 reference 错判配额
+**0. lark-base 同步铁律（Stage 5 第一步）**
+- 先读当前 `../lark-base/SKILL.md`，按它的「快速路由 / 写入前置规则 / Token 与链接 / 常见恢复」执行。
+- 本文件不作为 lark-cli 参数 SSOT；字段、记录值、workflow、dashboard、role 等复杂 JSON 必须回查 lark-base 对应 reference。
+- 某个命令没有专门 reference 时，以 `lark-cli base <command> --help` 和当前 lark-base/SKILL.md 的路由说明为准。
+- 涉及最新版、平台配额、API 能力、产品规则等易变事实时，再联网核验官方资料或版本发布信息。
 
 **A. 表名禁忌字符**：飞书表名不能含 `/ \ ? * [ ] :`
 - 先扫描所有 `tables[].name`，若含上述字符 **rename 后再建**（如「肖像/文案授权书」→「肖像文案授权书」）+ 全局替换 schema 内引用
 
-**B. 业务层 → lark-cli 调用层 schema transformer**
-- schema 中的 `single_select`/`single_link`/`property` 等业务层表达必须通过 transformer 转为 lark-cli 真实格式
+**B. 业务层 → lark-base 调用层 schema transformer**
+- schema 中的 `single_select`/`single_link`/`property` 等业务层表达必须通过 transformer 转为当前 lark-base 真实 field JSON
 - 详见 [`schema_format_contract.md`](schema_format_contract.md) § 字段类型映射表 + Transformer 模板
 
-**C. 租户配额预检**
-- `edit perm` 角色在 lark-cli API 层面**几乎必失败**（"row quota limit"），无论字段如何配置 — 这是飞书租户对 API 的硬限制
-- `read_only` 角色 + `view_rule.allow_edit=true` + `record_rule={}` 是唯一稳定可建配置
-- **决策**：5 个 edit 角色 → 跳过 lark-cli 直接给用户 UI 配置文档；只用 lark-cli 建 read_only 角色（如基金会脱敏角色）
+**C. 高级权限预检**
+- 创建/更新角色前必须读 `lark-base-role-guide.md` 和 `role-config.md`。
+- `+role-create` 只创建自定义角色；系统角色不能删除，更新前先 `+role-get`。
+- 如果 API 返回配额或权限错误，按当前 lark-base 的常见恢复和最小可复现方式排查；不要把旧实测中的某个租户限制当成全局规则。
 
 **D. 团队成员 open_id 可访问性**
 - 工作流的 `LarkMessageAction.receiver` 需要真实 open_id
@@ -37,46 +37,35 @@ Stage 5 自动建 base 时，按本文严格遵循的依赖顺序、批量约束
 - **fallback**：用 owner 自己的 open_id 占位 → 工作流建成 disabled 状态 → 写入 handover 让用户 UI 改 receiver 后启用
 
 **E. 主字段策略**
-- 必须 `text` 或 `formula`（参考 `schema_format_contract.md` § 主字段设计规则）
-- 若 schema 已是 auto_number primary，需要 `+field-update` 把 auto_number primary 转 formula（保留 ID 不变）
+- 每张表第一列必须是对象/主体名称或主体可读标识（参考 `schema_format_contract.md` § 主字段设计规则）。
+- 禁止 `auto_number` 作 primary 或第一列；若 schema 已是 auto_number primary，先改为主体名称字段或新增 formula 主字段，再把 auto_number 降为第二列及以后。
+- 执行前抽查所有 link 目标表：关联列显示的主字段必须让业务用户一眼知道关联的是哪个对象。
 
-## lark-cli API 真实 schema 速查（2026-04-16 实测加入，与 lark-base reference 互补）
+## 历史踩坑提醒（不替代 lark-base reference）
 
-> 这些是实测过踩坑发现的，**不要凭官方文档上的示例字段名想当然**。
+> 以下只是历史排错线索。执行前必须以当前 lark-base reference 和 `--help` 为准，不得直接复制本节片段作为命令参数。
 
-### Workflow（lark-base-workflow-create）
-- 顶层 body 必传 `client_token`（任意唯一字符串如 `str(int(time.time()*1000000))`）
-- `TimerTrigger.data`：`rule` ∈ NO_REPEAT/DAILY/WEEKLY/MONTHLY/YEARLY/WORKDAY/CUSTOM；MONTHLY 用 `sub_unit:[day]`；不是 `cron`
-- `AddRecordTrigger.data`：必填 `table_name` + **`watched_field_name`**（缺则 800004006 validate error）
-- `LarkMessageAction.data`：嵌套结构 `{receiver:[{value_type:"user",value:{id:"ou_xxx"}}], send_to_everyone:false, title:[{value_type:"text",value:"标题"}], content:[{value_type:"text",value:"正文"},{value_type:"ref",value:"$.step_id.fieldName"}], btn_list:[]}`
-- 创建后 status 固定 `disabled`，需 `+workflow-enable` 启用
+### Workflow
+- 创建/更新 workflow 前读 `lark-base-workflow-guide.md` 和 `lark-base-workflow-schema.md`；不要凭自然语言猜 step type、ref 语法或 data 结构。
 
 ### Dashboard
-- `+dashboard-create` 返回 `data.dashboard.dashboard_id`（不是 `data.id`）
-- `+dashboard-block-create`：text block 用 `data_config={"text":"..."}`（**不是 `content`**）；其他类型用 `table_name`+`series`+`group_by`+`filter`
+- 创建/更新 dashboard block 前读 `lark-base-dashboard.md` 和 `dashboard-block-data-config.md`；读取图表计算结果用 `lark-base-dashboard-block-get-data.md`。
 
 ### Form
-- `+form-create` 返回 `data.id`（直接在 data 下，不嵌套 form 子对象）
-- `+form-questions-create` 一次最多 10 题；type 仅支持 `text/number/select/datetime/user/attachment/location`（无 `link`，引用 link 字段的题目要降级为 `text`）
+- 表单题目创建/更新读 `lark-base-form-questions-create.md` / `lark-base-form-questions-update.md`；提交读 `lark-base-form-detail.md` 和 `lark-base-form-submit.md`。
 
 ### Role / advperm
-- 必先 `+advperm-enable`（否则 role 创建无效）
-- `view_rule` + `field_rule` + `record_rule` 三个**全是必填**（when perm != no_perm）
-- **关键禁忌**：`view_rule.allow_edit=false` 触发租户配额；`record_rule.other_record_all_read=true` 也触发
-- 安全配置（read_only）：`{"perm":"read_only","view_rule":{"allow_edit":true,"visibility":{"all_visible":true}},"field_rule":{"field_perm_mode":"all_read"},"record_rule":{}}`
-- `+role-list` 返回 `data.data` 是**字符串化 JSON**，需要 `json.loads(d['data']['data'])['base_roles']` 二次解析
+- 角色 JSON 以 `role-config.md` 为准；`+role-create` 只支持自定义角色，`+role-update` 是 delta merge。
 
 ### Record
-- `+record-upsert` 返回 `data.record.record_id_list[0]`
-- link 字段格式：直接 `["recXXX"]` 字符串数组（不是 `[{"record_ids":[...]}]` 嵌套对象）
+- 写记录前读 `lark-base-cell-value.md`；附件走专用 attachment 命令，不作为普通 CellValue 写入。
 
 ### 默认表 / 危险操作
-- `+base-create` 自动创建 1 个默认"数据表"，**lark-cli `+table-delete` 拒绝删（unsafe_operation_blocked）**，需用户 UI 删
-- `+advperm-disable` 也被 unsafe_operation_blocked，需 UI
+- 删除、角色更新、字段更新、关闭高级权限等高风险操作遵循当前 CLI confirmation gate；目标不明确时先 list/get 消歧。
 
 ## 执行依赖顺序（严格按此顺序，倒着回滚）
 
-> **2026-04-16 实测优化**：`+table-create` 支持 `--fields` 和 `--view` 一次性传入，可在建表时同时建非关联字段和初始视图，**减少串行写入次数 + 规避 lark-base §4.3 批次间 0.5-1s 延迟约束**。
+> 可用 `+table-create` 创建表；若当前 CLI 支持 `--fields` / `--view`，可在建表时带入已转换好的非关联字段和初始视图。是否支持、参数格式以 `lark-cli base +table-create --help` 为准。
 
 ```
 A. 创建 base
@@ -84,7 +73,7 @@ A. 创建 base
        （+table-create --fields '[...]' --view '[...]'）
        └─ C. 跨表创建关联字段（single_link / duplex_link，依赖目标表已存在）
            └─ D. 创建 formula / lookup 字段（依赖关联字段已建）
-               └─ E. 视图细配（+view-set-filter / +view-set-sort 等，对已建视图做高级配置）
+               └─ E. 视图细配（filter 用 +view-set-filter；其他视图配置先 get 现状再按当前 CLI 更新）
                └─ F. 启用 advperm + 创建角色（依赖表已建）
                └─ G. 创建表单 + 表单题目（依赖表已建）
                └─ H. 创建工作流（依赖字段已建）
@@ -104,9 +93,9 @@ lark-cli base +table-create \
   --name "客户" \
   --fields '[
     {"name":"客户名称","type":"text","is_primary":true},
-    {"name":"状态","type":"single_select","property":{"options":["进行中","已签约","流失"]}},
-    {"name":"负责人","type":"user","property":{"multiple":false}},
-    {"name":"创建时间","type":"created_time"}
+    {"name":"状态","type":"select","multiple":false,"options":[{"name":"进行中","hue":"Blue","lightness":"Lighter"},{"name":"已签约","hue":"Green","lightness":"Light"},{"name":"流失","hue":"Gray","lightness":"Lighter"}]},
+    {"name":"负责人","type":"user","multiple":false},
+    {"name":"创建时间","type":"created_at"}
   ]' \
   --view '[{"name":"客户总览","view_type":"grid"}]' \
   --as user
@@ -124,7 +113,11 @@ lark-cli base +table-create \
 4. **写入 `07_execution_log.md`**（命令/参数/返回/状态）
 5. **失败立即停**，进入回滚流程
 
-## 关键约束（来自 lark-base §4.3）
+注意：当前 `lark-cli base +table-create --dry-run` 可能只展示建表主体请求，不展开 `--fields` / `--view` 的后续请求。使用 `+table-create --fields` 前，必须先把字段数组按 `lark-base-field-json.md` 转换，并用以下方式至少做一种验证：
+- 对每类字段抽样运行 `+field-create --dry-run`，确认请求体没有业务层 type / `property` 泄漏；
+- 或运行本地 schema transformer 校验，确认第一列主字段、link 目标表、字段 type 和 JSON key 全部符合当前 lark-base。
+
+## 关键约束（来自当前 lark-base）
 
 | 约束 | 说明 | 违反后果 |
 |------|------|---------|
@@ -135,8 +128,8 @@ lark-cli base +table-create \
 ## Stage 5.A — 创建 base
 
 ```
-必读：lark-base/references/lark-base-base-create.md
-必读：lark-base/references/lark-base-workspace.md
+必读：../lark-base/SKILL.md 的「快速路由」「身份与权限降级」
+必要时读：lark-cli base +base-create --help
 ```
 
 身份选择（依据 [`ownership_transfer_runbook.md`](ownership_transfer_runbook.md)）：
@@ -150,7 +143,8 @@ lark-cli base +table-create \
 逐张表 `+table-create`（不能并发，按顺序）。记录每张表返回的 `table_id`，建立 `name -> table_id` 映射。
 
 ```
-必读：lark-base/references/lark-base-table-create.md
+必读：../lark-base/SKILL.md 的「快速路由」
+必要时读：lark-cli base +table-create --help
 ```
 
 ## Stage 5.C — 创建非关联字段
@@ -159,7 +153,7 @@ lark-cli base +table-create \
 
 ```
 必读：lark-base/references/lark-base-field-create.md
-必读：lark-base/references/lark-base-shortcut-field-properties.md
+必读：lark-base/references/lark-base-field-json.md
 ```
 
 跳过：`single_link / duplex_link / formula / lookup / 系统字段`（C 阶段不建）。
@@ -167,7 +161,7 @@ lark-cli base +table-create \
 ## Stage 5.D — 创建关联字段
 
 ```
-必读：lark-base/references/lark-base-shortcut-field-properties.md §single_link / §duplex_link
+必读：lark-base/references/lark-base-field-json.md §link
 ```
 
 注意：双向关联建一边即可，反向字段自动出现，**不要重复建**。
@@ -184,24 +178,23 @@ lark-cli base +table-create \
 ## Stage 5.F — 创建视图
 
 ```
-必读：lark-base/references/lark-base-view-create.md
+必读：../lark-base/SKILL.md「表单与视图细节」
+筛选必读：lark-base/references/lark-base-view-set-filter.md
+必要时读：lark-cli base +view-create --help / +view-update --help / 对应 +view-* --help
 ```
 
 创建视图后，按需配置：
 - `+view-set-filter` （视图筛选）
-- `+view-set-sort` （排序）
-- `+view-set-group` （分组）
-- `+view-set-visible-fields` （可见字段）
-- `+view-set-card` / `+view-set-timebar` （特殊视图类型）
+- sort/group/card/timebar/visible-fields 等配置：先用对应 get 命令读现状，保留未修改字段，只替换用户要求变更的配置；具体命令和参数以当前 `lark-cli base +view-* --help` 为准。
 
-每条 `+view-set-*` 必先读对应 reference。
+只有 `+view-set-filter` 有保留 reference；其他视图配置不要套旧 reference 名。
 
 ## Stage 5.G — 启用 advperm + 创建角色
 
 ```
-必读：lark-base/references/lark-base-advperm-enable.md
-必读：lark-base/references/lark-base-role-create.md
+必读：lark-base/references/lark-base-role-guide.md
 必读：lark-base/references/role-config.md
+必要时读：lark-cli base +advperm-enable --help / +role-create --help / +role-update --help
 ```
 
 执行顺序：
@@ -213,8 +206,8 @@ lark-cli base +table-create \
 ## Stage 5.H — 创建表单 + 题目
 
 ```
-必读：lark-base/references/lark-base-form-create.md
 必读：lark-base/references/lark-base-form-questions-create.md
+必要时读：lark-cli base +form-create --help / +form-questions-create --help
 ```
 
 执行顺序：
@@ -224,8 +217,9 @@ lark-cli base +table-create \
 ## Stage 5.I — 创建工作流
 
 ```
-必读：lark-base/references/lark-base-workflow-create.md
+必读：lark-base/references/lark-base-workflow-guide.md
 必读：lark-base/references/lark-base-workflow-schema.md（CRITICAL）
+必要时读：lark-cli base +workflow-create --help / +workflow-update --help
 ```
 
 禁止凭自然语言猜 step type。每个 step 的 `type` 必须查 schema 文档。
@@ -236,9 +230,8 @@ lark-cli base +table-create \
 
 ```
 必读：lark-base/references/lark-base-dashboard.md
-必读：lark-base/references/lark-base-dashboard-create.md
-必读：lark-base/references/lark-base-dashboard-block-create.md
 必读：lark-base/references/dashboard-block-data-config.md
+必要时读：lark-cli base +dashboard-create --help / +dashboard-block-create --help
 ```
 
 执行顺序：
@@ -263,15 +256,15 @@ B 失败 → 删 table
 A 失败 → 删 base（如已建）
 ```
 
-回滚命令：
+回滚命令（执行前以当前 `lark-cli base <command> --help` 核对）：
 - `+dashboard-block-delete` / `+dashboard-delete`
-- `+workflow-disable` 然后 `+workflow-update`（lark-base 1.2.0 暂无 +workflow-delete，需查最新版）
+- workflow 回滚优先 `+workflow-disable`；是否支持删除以当前 CLI 为准
 - `+form-questions-delete` / `+form-delete`
 - `+role-delete` / `+advperm-disable`
 - `+view-delete`
 - `+field-delete`
 - `+table-delete`
-- base 删除走 `lark-cli drive +file-delete`（base 是 drive file 的一种）
+- base 删除属于高风险 drive 文件操作；除非用户明确确认，否则只报告残留 Base 链接和已建对象清单
 
 回滚前先 `--dry-run` 看会删什么；回滚也写日志（`07_execution_log.md` 加 `## ROLLBACK` 章节）。
 

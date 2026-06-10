@@ -156,7 +156,7 @@
    - 字段类型白名单：`fields[].type` 必须在 lark-base 支持列表（参 `schema_format_contract.md`）
    - 命名一致性：关联字段命名 ≈ 主表名
    - 公式字段引用：`formula` 字段公式只能引用同表已定义字段
-   - 角色权限合法：`roles[].permissions` 引用的字段都存在
+   - 角色权限合法：`roles[].table_rule_map / dashboard_rule_map / docx_rule_map` 引用的表、字段、视图和组件都存在；具体结构以 `role-config.md` 为准
 3. 校验失败 → 自修复 → 再校验，最多 3 次
 4. 3 次仍失败 → 停下，把 issues 报告给用户，等指示
 

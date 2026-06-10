@@ -236,17 +236,20 @@ text / number / select / datetime / user / attachment / location
 
 **禁止**用 `permissions` 数组结构——那不是当前 lark-base role JSON。
 
-## 主字段（primary）设计规则（2026-04-16 强化）
+## 主字段（primary）设计规则（2026-06-10 强化）
 
 **背景**：在飞书多维表格中，**主字段（第一列）是关联字段显示的文本**。A 表关联到 B 表，A 里看到的就是 B 的主字段值。如果主字段是 `auto_number`（显示 001/002/003），关联列就是一串无意义的序号——业务用户无法判断这是哪个老人/哪个站点/哪笔请款。
 
 **硬规则**：
-1. **主字段必须有业务语义**——`text` 或 `formula`（拼接多字段得业务可读标识）
-2. **禁止 `auto_number` 作主字段**——`auto_number` 允许保留，但必须放第二列及以后
-3. **每表字段顺序**：主字段在第一位 → 业务描述字段 → 关联字段 → 状态/状态机字段 → 时间戳/系统字段最后
+1. **主字段必须是对象/主体名称或主体可读标识**——优先用 `客户名称`、`项目名称`、`站点名称`、`老人编号`、`SKU名称`、`任务标题`、`订单号` 这类业务用户会用来识别一条记录的字段。
+2. **主字段必须放第一列**——第一列不是“内部 ID 位”，而是跨表引用、单向/双向关联、表单视图、记录分享、lookup 展示时的默认可读标题。
+3. **禁止 `auto_number` 作主字段或第一列**——`auto_number` 允许保留，但只能放第二列及以后，通常命名为 `内部序号` / `系统编号`；它不是业务主键，也不是跨表展示名。
+4. **没有自然名称时才用 `formula` 主字段**——公式必须拼出业务可读标识，如 `站点 · 数据月份`、`客户 · 合同月份`、`老人编号 · 签署日期`。
+5. **每表字段顺序**：主体名称/主体可读标识主字段 → 内部序号/业务编号等辅助标识 → 业务描述字段 → 关联字段 → 状态/状态机字段 → 时间戳/系统字段最后。
 
 **选择策略（决策树）**：
-- 表已有「名称/标题/编号（业务编号，非自增）」类 `text` 字段 → 直接提升为 primary，放第一位
+- 表已有「对象/主体名称」类 `text` 字段 → 直接提升为 primary，放第一位
+- 表没有名称，但有稳定业务编号（非自增、用户会拿它沟通，如老人编号、订单号、SKU编码）→ 可作为 primary，放第一位
 - 表无自然名字，但可由多字段拼接得业务可读标识（如"站点+月份"/"站点+季度"/"老人+签署日期"）→ 新增 `formula` 字段作 primary
 - 常见 formula 拼接模板：
   - `CONCATENATE({关联表}, " · ", TEXT({日期}, "yyyy-mm"))`
@@ -257,6 +260,8 @@ text / number / select / datetime / user / attachment / location
 - ❌ 请款单 primary=auto_number → 关联表显示"001" → 改为 formula "{站点} · {请款季度}"
 - ❌ 授权书 primary=auto_number → 看不出是谁的授权书 → 改为 formula "{关联老人} · {签署日期}"
 - ❌ 月度数据 primary=auto_number → 历史关联看不出是哪个月 → 改为 formula "{站点} · {数据月份}"
+- ❌ 客户表第一列=自增序号，第二列=客户名称 → 关联订单时只显示"001" → 改为第一列 `客户名称`，自增序号放第二列
+- ❌ 项目表第一列=项目ID，第二列=项目名称 → 表单/关联/看板默认标题不可读 → 改为第一列 `项目名称`
 
 ## 程序化校验规则（Stage 3 必跑）
 
@@ -267,16 +272,16 @@ text / number / select / datetime / user / attachment / location
 8. **form 实质性**：每个 form 的 `questions` 数组非空，每个 question 的 `type` 在 7 种枚举内
 9. **role 实质性**：每个 role 含 `role_name` + `role_type=custom_role` + `base_rule_map` 必填；`table_rule_map` 至少覆盖 1 张表
 10. **覆盖度**：每个 roles[].role_name 都出现在至少 1 张 dashboard 的 audience 或表的 table_rule_map 中（否则角色形同虚设）
-11. **主字段业务语义**（2026-04-16 新增）：主字段 `type` 必须是 `text` 或 `formula`，**禁止 `auto_number`**。校验逻辑：`for t in tables: assert t.primary_field.type in ('text','formula')`
+11. **主字段业务语义**：主字段必须是第一列，类型必须是 `text` 或 `formula`，且字段名/说明应指向对象/主体名称或主体可读标识；**禁止 `auto_number` 作主字段或第一列**。校验逻辑：`for t in tables: assert t.fields[0].is_primary and t.fields[0].type in ('text','formula') and t.fields[0].type != 'auto_number'`
 
 ## 不可违反约束
 
 1. **字段名精确匹配**——workflow/formula/lookup/data-query/role 中引用的字段名必须与 `tables[].fields[].name` 字面一致
-2. **主字段唯一且有语义**——每表恰好一个 `is_primary: true`，且类型必须是 `text` 或 `formula`
+2. **主字段唯一且有语义**——每表恰好一个 `is_primary: true`，必须在第一列，且应是对象/主体名称或主体可读标识
 3. **系统字段不写入** `is_primary`、`required` 等用户字段属性
 4. **双向关联自动反向**——不要在两张表都声明 duplex_link，lark-base 会自动生成反向字段
 5. **禁止发明调用层 JSON key**——不要自造 `widgets / actions / fields / permissions / panels / pages` 等 lark-base 不认识的字段；业务层扩展字段只能用于设计文档，Stage 5 前必须丢弃或转换
-6. **字段顺序**——主字段第一位，auto_number 若保留则放第二列
+6. **字段顺序**——对象/主体名称主字段第一位，auto_number 若保留则放第二列及以后
 
 ## Stage 3 校验失败处理
 

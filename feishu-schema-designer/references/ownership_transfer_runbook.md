@@ -1,7 +1,7 @@
 # Stage 6 所有权处理手册
 
-> verified: 2026-04-16
-> 核心约束来源：`lark-base/SKILL.md` §4.4 第 5 条 + `lark-base-base-create.md`
+> verified: 2026-06-10（与 lark-base v1.2.2 / lark-drive 权限模型协同）
+> 核心约束来源：`lark-base/SKILL.md` 的身份与权限降级规则、`lark-drive/SKILL.md` 的文档权限管理规则
 
 ## 第一性原理
 
@@ -9,8 +9,10 @@
 - `--as user` 创建 → 用户本人是 owner（零额外步骤）
 - `--as bot` 创建 → bot 是 owner（需要给用户授权）
 
-**lark-base 官方铁律**：
+**铁律**：
 > "owner 转移必须单独确认，禁止擅自执行"
+
+Base 高级权限角色（`lark-cli base +role-*`）只管理 Base 内部表/视图/仪表盘等访问规则，不等同于云文档协作者授权。给用户打开新建 Base 的能力属于 Drive 文档权限，走 lark-drive / drive permission.members，不要用 `+role-create` 伪造 `full_access`。
 
 ## 决策树
 
@@ -23,11 +25,10 @@ Stage 5.A 创建 base 时用了什么身份？
 │     → 用户登录飞书即可看到 base
 │
 └─ --as bot
-   └─ bot 是 owner，用户暂时看不到
-      → 步骤 1: 取用户 open_id
-      → 步骤 2: 用 bot 身份给用户授 full_access
-      → 步骤 3: 编写 08_handover.md
-      → 用户登录飞书可见 base，权限为「管理员」
+   └─ bot 是 owner
+      → 先检查 +base-create 返回的 permission_grant
+      → granted: 当前 CLI 用户已有可管理权限，直接写 08_handover.md
+      → skipped/failed/缺失: 转 lark-drive 权限流程补授或记录待授权
       → owner 仍是 bot；除非用户单独说"owner 也归我"
 ```
 
@@ -68,9 +69,15 @@ lark-cli base +base-create --name "..." --as bot
 
 成功后：
 - ⚠️ bot 是 owner，**用户登录飞书看不到这个 base**
-- ⚠️ 必须立即给用户授 full_access
+- ⚠️ 必须检查返回中的 `permission_grant`，确认当前 CLI 用户是否已获得 `full_access`（可管理权限）
 
 ### Stage 6 步骤（路径 B 专用）
+
+#### 步骤 0：检查自动授权结果
+
+`+base-create --as bot` 若返回 `permission_grant.status=granted` 且 `perm=full_access`，说明当前 CLI 用户已经可以打开并管理新 Base。记录到 `08_handover.md` 即可。
+
+若 `permission_grant.status=skipped/failed`，或返回中没有 `permission_grant`，再进入手动补授权流程。
 
 #### 步骤 1：取用户 open_id
 
@@ -83,7 +90,7 @@ lark-cli contact +get-user --as user
 { "user": { "open_id": "ou_xxxx", "name": "张三" } }
 ```
 
-**失败处理**（来自 `lark-base-base-create.md` 原文规定）：
+**失败处理**：
 - `lark-cli contact +get-user` 无法执行 → 视为"本地没有可用 user 身份"
 - 明确告知用户：base 已建好，但**未完成授权**
 - 在 `08_handover.md` 注明：用户可以
@@ -91,20 +98,19 @@ lark-cli contact +get-user --as user
   - 或继续以 bot 身份处理该 base
   - 或要求 owner 转移（需用户单独确认）
 
-#### 步骤 2：bot 身份给用户授 full_access
+#### 步骤 2：bot 身份给用户授云文档 full_access
 
 ```bash
-# 仍然用 bot 身份（lark-base-base-create.md 要求）
-lark-cli base +role-create --base-token <base_token> \
-  --role-name "管理员" --role-type "system" \
-  --member-list '[{"open_id": "ou_xxxx", "type": "user"}]' \
-  --permissions full_access \
+# Base 是 bitable 类型的云文档；协作者授权走 drive permission.members，不走 base +role-create。
+lark-cli drive permission.members create \
+  --params '{"token":"<base_token>","type":"bitable"}' \
+  --data '{"member_type":"openid","member_id":"<user_open_id>","perm":"full_access","type":"user"}' \
   --as bot
 ```
 
-> 实际命令格式以 `lark-base/references/lark-base-role-create.md` 为准——执行前必先读
+> 实际命令格式以当前 `lark-drive/SKILL.md` 和 `lark-cli drive permission.members create --help` 为准。执行前必须切到 / 读取 lark-drive，并按 lark-shared 处理 scope 与权限错误。
 
-**成功**：用户登录飞书后可见 base，权限为管理员（full_access）
+**成功**：用户登录飞书后可见 base，权限为可管理（full_access）
 **失败**：在 `08_handover.md` 注明失败原因 + 重试方法
 
 ## owner 转移（用户单独确认才执行）
@@ -112,10 +118,10 @@ lark-cli base +role-create --base-token <base_token> \
 用户主动说"我要做 owner，不只是管理员"时才执行。
 
 **已实测确认（2026-04-16）**：
-- 命令：`lark-cli drive permission.members transfer_owner`
+- 命令：`lark-cli drive permission.members transfer_owner`（执行前用当前 `--help` 核对）
 - 命令性质：`danger: true`（lark-cli 标记的高风险操作）
 - 必须身份：`user_access_token` 才能调用（即 `--as user`）；bot 不能转 owner
-- schema 查询：`lark-cli schema drive.permission.members.transfer_owner`
+- 如果 CLI 子命令或参数有变化，以 `lark-cli drive permission.members transfer_owner --help` / lark-drive 当前文档为准
 
 ### 必填参数
 
@@ -136,7 +142,7 @@ lark-cli base +role-create --base-token <base_token> \
 
 ### 执行步骤
 
-1. **必先 dry-run**：`lark-cli drive permission.members transfer_owner --dry-run --as user --params '{"token":"<base_token>","type":"bitable"}' --data '{"member_type":"openid","member_id":"<user_open_id>"}'`
+1. **必先 dry-run**：按当前 help 构造 `lark-cli drive permission.members transfer_owner --dry-run --as user ...`
 2. 把 dry-run 输出（实际请求）展示给用户，二次确认
 3. 用户确认后去掉 `--dry-run` 真执行
 4. 推荐 `old_owner_perm=full_access` + `remove_old_owner=false`——agent（旧 owner，bot 路径下）保留管理员权限，方便后续协助
@@ -177,7 +183,8 @@ lark-cli base +role-create --base-token <base_token> \
 1. 当前 base 由 bot 持有，你看不到
 2. 解决方法：
    - 跑 `lark-cli auth login`，授权后再让我重试 Stage 6 步骤 1-2
-   - 或者告诉我 owner 转移（需要 lark-cli api PATCH 底层操作）
+   - 或让有权限的人在飞书 UI 中把这个 Base 分享给你并授予可管理权限
+   - owner 转移必须由有 user 权限的身份执行，且需要你单独确认
 
 ## 后续动作建议
 1. 录入初始数据（人工 / 用 lark-base `+record-batch-create` 批量导入）
