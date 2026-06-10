@@ -26,13 +26,13 @@ metadata:
 
 **Skill 本质**：给 agent（你）的工作流剧本，不是软件。零 scripts、零外部 LLM、零 prompts 文件——所有推理由你（agent）承担，所有执行委托给 lark-* skill。
 
-**核心命题**：lark-base 已覆盖『有了 schema 怎么执行』，本 skill 覆盖『从需求/资料怎么推出 schema』。两者**单向依赖**：本 skill → lark-base / lark-doc。
+**核心命题**：lark-base 已覆盖『有了 schema 怎么执行』，本 skill 覆盖『从需求/资料怎么推出 schema』。两者**单向依赖**：本 skill → lark-base / lark-doc。本 skill 不复制 lark-base 的命令细节；Stage 5 执行时以当前 lark-base/SKILL.md 和其 references 为唯一可信源。
 
 **禁止**：
 - ❌ 自己写代码调 lark-cli（必须切到 lark-base skill）
 - ❌ 自己调外部 LLM API（你就是 LLM）
-- ❌ 发明 lark-base 不认识的 schema 字段（严格遵循官方格式）
-- ❌ 擅自做 owner 转移（lark-base §4.4 明确禁止）
+- ❌ 发明 lark-base 不认识的字段 / workflow / dashboard / role JSON key
+- ❌ 擅自做 owner 转移（必须用户单独确认）
 
 ## 触发与边界
 
@@ -80,7 +80,7 @@ metadata:
 
 **Stage 4**：`06_proposal.md` 用业务语言展示『最终应用长什么样』——表/字段/视图/自动化/仪表盘/表单/角色全部用人话描述，**禁止出现 lark-cli 命令**。命令清单留到 `07_execution_log.md`。
 
-**Stage 5**：严格按 [`references/execution_playbook.md`](references/execution_playbook.md) 编排顺序和 lark-base §4.3 约束（list 命令禁并发、批量 ≤500、批次间 0.5-1s 延迟）。每步失败立即停下、记录、按 best-effort 回滚已建对象。
+**Stage 5**：严格按 [`references/execution_playbook.md`](references/execution_playbook.md) 编排顺序和当前 lark-base 约束执行。关键规则：先读真实结构；表/字段/视图/workflow/dashboard 名称和 ID 以命令返回为准；同表连续写入串行；批量记录单批最多 200 条。每步失败立即停下、记录、按 best-effort 回滚已建对象。
 
 **Stage 6**：所有权处理见 [`references/ownership_transfer_runbook.md`](references/ownership_transfer_runbook.md)。优先 `--as user` 创建（用户即 owner，零额外步骤）；否则 `--as bot` 创建后给用户授 `full_access`。**不擅自转 owner**——除非用户明确要求。
 
@@ -109,18 +109,18 @@ metadata:
 
 ## 不可违反规则（继承 lark-base 约束）
 
-1. **先拿结构再写命令**——lark-base §4.2 第 1 条
+1. **先拿结构再写命令**——以当前 lark-base「Base 心智模型 / 写入前置规则」为准
 2. **不猜表名/字段名**——一律以真实返回为准
-3. **写字段前必读 `lark-base-shortcut-field-properties.md`**
+3. **写字段前必读 `lark-base-field-json.md`；创建/更新命令细节读 `lark-base-field-create.md` / `lark-base-field-update.md`**
 4. **写记录前必先 `+field-list`**
-5. **workflow 必先读 schema 文档**
+5. **workflow 必先读 `lark-base-workflow-guide.md` 和 `lark-base-workflow-schema.md`**
 6. **公式/lookup 字段必先读对应 guide**
-7. **dashboard 必先读 dashboard guide**
+7. **dashboard 必先读 `lark-base-dashboard.md` 和 `dashboard-block-data-config.md`**
 8. **owner 转移必须用户单独确认才执行**
 
 ## 常见错误与自检
 
-- 用户给的是 wiki 链接 → 必先 `lark-cli wiki spaces get_node` 解析，**禁止**直接当 base_token
+- 用户给的是 wiki 链接 → 按当前 lark-base「Token 与链接」规则先 `wiki +node-get` 解析，**禁止**直接当 base_token
 - bot 创建成功但用户看不到 → 检查是否完成 `--as bot` 给 user 授 `full_access`
 - workflow 创建失败 → 必读 `lark-base-workflow-schema.md`，禁止凭自然语言猜 type
 - formula/lookup 创建失败 → 必读对应 guide，guide 未读不得创建
@@ -140,14 +140,14 @@ metadata:
 7. **Stage 4 按系统维度组织** —（2026-04-16 新增）按"表/视图/工作流"分节审批，用户难判断"我这个角色能干啥"。应按**角色维度**组织，每个角色一段完整故事
 8. **跳过 Stage 0 资料消化** — 直接进 Stage 1 推理会遗漏用户已知信息，导致 Stage 2 反复追问已答问题
 9. **执行前不切 skill** — 在 Stage 5 不切到 lark-base 直接自己拼 lark-cli 命令，等于放弃官方 reference 防错机制
-10. **schema 字段类型用 lark-base 不认识的名字** — 比如写 `enum` 而 lark-base 只认 `single_select`/`multi_select`。必查 `lark-base-shortcut-field-properties.md`
+10. **schema 字段类型用 lark-base 不认识的名字** — 业务层可用 `single_select` / `single_link` 等抽象，但 Stage 5 前必须按 `schema_format_contract.md` 转成当前 `lark-base-field-json.md` 认可的调用层 JSON；严禁直接把业务层 type 当 lark-cli 入参
 11. **批量写记录不分批** — 单批超 **200 条**触发 1254104 错误（v1.0.13 实测确认，此前 reference 里的 500 已作废）
 12. **list 命令并发** — `+table-list / +field-list / +record-list / +view-list` 等明确禁止并发，必须串行
 13. **主字段用 auto_number** —（2026-04-16 银杏家园实测暴露）关联字段显示的是主字段值，若主字段是 `auto_number`，A 表关联 B 表时看到"001/002/003"无业务可读性。主字段必须是 `text` 或 `formula`（拼接业务信息），`auto_number` 若保留放第二列。详见 [`references/schema_format_contract.md`](references/schema_format_contract.md) § 主字段设计规则
 14. **Stage 4 审批让用户跳出对话读文件** —（2026-04-16 银杏家园实测暴露）proposal 只写进 `06_proposal.md` 然后让用户自己打开文件审阅是反模式。Stage 4 必须**把方案内容直接在对话里呈现**（完整角色故事 + 架构 + 校验结果 + 确认清单），文件只作留档。用户在对话里一次看完即可决定，不需要切窗口
 15. **遇到 API 错误就借口"配额"/"context 收紧"放弃** —（2026-04-16 银杏家园实测暴露）首次 +role-create 失败"row quota limit"我直接打包成"租户限制需 UI 手动建"的借口；用户拷问后，深入排查发现根因是 `view_rule.allow_edit=false` 和 `other_record_all_read=true` 触发配额，而 `allow_edit=true` + `record_rule={}` 工作。同样模式：dashboard text block 失败、workflow 4 个失败 — 实际都是 schema 字段名差异（`text` vs `content` / `watched_field_name` 必填），不是真的不可建。**规则**：lark-cli API 错误必须**逐项排查**（最小可复现样本 → 比对成功配置 → 找出差异），禁止包装成"用户手动做"的甩锅。"放弃"必须是真正撞墙后的结论，不是遇阻就立刻退场
 16. **schema_format_contract.md 字段类型映射 bug** —（2026-04-16 实测暴露）我列出的字段类型白名单（`single_select`/`single_link`/`property` 包装等）**完全是 Open API 概念名**，不是 lark-cli `+field-create --json` 的实际字段。lark-cli 真实用：`select`+`multiple` / `link`+`bidirectional` / `created_at`/`updated_at` / `style.type=phone/url/currency/progress/rating` 等扁平 + 嵌套 `style` 子对象格式。**已修**：schema_format_contract.md 已重写映射表 + 内置 transformer 模板
-17. **凭本地 lark-base reference 下结论不联网验证** —（2026-04-17 用户拷问后暴露）整个 Stage 5 我仅依赖本地 `~/.claude/skills/lark-base/references/*.md` + `--help` + 错误返回，**从未联网验证 lark-cli 最新版本 / 飞书开放平台官方 API / 租户配额规则**。后果：会话期间 lark-cli 从 v1.0.10 发到 v1.0.13（每日新版）我不知道；batch write 限制实际是 200 不是我 reference 里的 500；`lark-cli api` 通用透传可调所有未封装 OpenAPI（含公开分享）我没发现。**铁律**：Stage 5 前必做 ① `lark-cli --version` + GitHub releases 对比 ② WebSearch 飞书多维表格官方文档确认配额规则 ③ `lark-cli <domain> 2>&1` 穷举所有子命令。违反 CLAUDE.md "技术选型搜索（阻断级）" 规则
+17. **凭过期 reference 下结论** — Stage 5 前必须先读当前环境中的 `lark-base/SKILL.md` 和本次涉及的 lark-base reference；命令缺少 reference 时读 `lark-cli base <command> --help`。涉及最新版本、配额、接口能力等易变事实时再联网核验，禁止依据旧 feishu-schema-designer 里的命令片段执行
 18.5 **未确认基数关系就建表/导数** —（2026-06-08 新民通宵自主执行实测暴露）用户睡前下令无监督执行，Claude 在未确认"一张票据图 = 一行 = 一笔费用"这一核心基数关系的情况下建好表、导了数、跑了 OCR，醒来发现模型与业务实体不符，全量返工。**规则**：见上方「设计硬门」第 0 步——核心实体基数关系存在 [待确认] 时禁止建表/导数，无监督模式下宁可停在 Stage 2 等用户醒来，不可带病推进
 19. **`lark-cli api <method> <path>` 万能透传** —（2026-04-17 联网发现）所有 lark-cli 未封装的飞书 OpenAPI 都可通过 `lark-cli api POST /open-apis/drive/v1/permissions/:token/public` 等直接调用。Stage 5 遇到"lark-cli 不支持"时先查 `lark-cli api --help`，禁止直接宣布"API 不可达"
 
