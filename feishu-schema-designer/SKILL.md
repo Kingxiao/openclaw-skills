@@ -60,6 +60,14 @@ metadata:
 
 详细每阶段动作：[`references/design_methodology.md`](references/design_methodology.md)
 
+### 设计硬门（阻断级 · 2026-06-10 落地 pending 变更9，源自 06-01→06-08 连续 5 个复盘窗口复发）
+
+**第 0 步 — 核心实体基数关系确认（最高优先）**：输出任何 schema 草稿前，先列出全部核心实体对的基数关系（1:1 / 1:N / N:N，例："一张票据图片 = 一行记录 = 对应一笔费用"），每条标注出处：`[一手资料 <文件:位置>]` / `[用户确认 <日期>]` / `[待确认]`。**存在任何 [待确认] 的核心基数关系时，禁止进入 Stage 3 建表、禁止导数、禁止跑 OCR/批处理**——基数关系错 = 全表结构错，返工成本最高（2026-06-08 新民票据↔费用通宵返工实证）。Stage 2 业务追问必须把 [待确认] 基数关系列为第一组问题。
+
+**维度出处门**：`02_schema_draft.json` 中每个表 / 一等维度 / 关键字段，必须在 `01_requirement.md` 能找到出处标注（一手资料行号 / 用户原话 / `[待确认]`）。无出处维度 = 现状捏造，禁止进入模型（feedback_cognitive_discipline §7：引入任何建模维度 = 现状陈述，须一手出处或标待确认）。
+
+**设计四件套先于建表**：Stage 4 审批包必须四件齐备——①目标数据模型 ②数据流程 ③重构后系统交互 ④数据迁移方案——缺一不得进 Stage 5。"先建表填数、设计后补"是已知返工模式（2026-06-06 新民 19 表返工实证）。
+
 ### 关键阶段约束
 
 **Stage 0**：资料量大时**必须用 subagent 读**（隔离 context）；但 subagent 的摘要**不能作为最终结论**——agent 必须亲自 Read 关键原文（特别是要引用/建模的具体表/流程/字段）。subagent 报告用于概览，不用于决策。
@@ -140,7 +148,8 @@ metadata:
 15. **遇到 API 错误就借口"配额"/"context 收紧"放弃** —（2026-04-16 银杏家园实测暴露）首次 +role-create 失败"row quota limit"我直接打包成"租户限制需 UI 手动建"的借口；用户拷问后，深入排查发现根因是 `view_rule.allow_edit=false` 和 `other_record_all_read=true` 触发配额，而 `allow_edit=true` + `record_rule={}` 工作。同样模式：dashboard text block 失败、workflow 4 个失败 — 实际都是 schema 字段名差异（`text` vs `content` / `watched_field_name` 必填），不是真的不可建。**规则**：lark-cli API 错误必须**逐项排查**（最小可复现样本 → 比对成功配置 → 找出差异），禁止包装成"用户手动做"的甩锅。"放弃"必须是真正撞墙后的结论，不是遇阻就立刻退场
 16. **schema_format_contract.md 字段类型映射 bug** —（2026-04-16 实测暴露）我列出的字段类型白名单（`single_select`/`single_link`/`property` 包装等）**完全是 Open API 概念名**，不是 lark-cli `+field-create --json` 的实际字段。lark-cli 真实用：`select`+`multiple` / `link`+`bidirectional` / `created_at`/`updated_at` / `style.type=phone/url/currency/progress/rating` 等扁平 + 嵌套 `style` 子对象格式。**已修**：schema_format_contract.md 已重写映射表 + 内置 transformer 模板
 17. **凭本地 lark-base reference 下结论不联网验证** —（2026-04-17 用户拷问后暴露）整个 Stage 5 我仅依赖本地 `~/.claude/skills/lark-base/references/*.md` + `--help` + 错误返回，**从未联网验证 lark-cli 最新版本 / 飞书开放平台官方 API / 租户配额规则**。后果：会话期间 lark-cli 从 v1.0.10 发到 v1.0.13（每日新版）我不知道；batch write 限制实际是 200 不是我 reference 里的 500；`lark-cli api` 通用透传可调所有未封装 OpenAPI（含公开分享）我没发现。**铁律**：Stage 5 前必做 ① `lark-cli --version` + GitHub releases 对比 ② WebSearch 飞书多维表格官方文档确认配额规则 ③ `lark-cli <domain> 2>&1` 穷举所有子命令。违反 CLAUDE.md "技术选型搜索（阻断级）" 规则
-18. **`lark-cli api <method> <path>` 万能透传** —（2026-04-17 联网发现）所有 lark-cli 未封装的飞书 OpenAPI 都可通过 `lark-cli api POST /open-apis/drive/v1/permissions/:token/public` 等直接调用。Stage 5 遇到"lark-cli 不支持"时先查 `lark-cli api --help`，禁止直接宣布"API 不可达"
+18.5 **未确认基数关系就建表/导数** —（2026-06-08 新民通宵自主执行实测暴露）用户睡前下令无监督执行，Claude 在未确认"一张票据图 = 一行 = 一笔费用"这一核心基数关系的情况下建好表、导了数、跑了 OCR，醒来发现模型与业务实体不符，全量返工。**规则**：见上方「设计硬门」第 0 步——核心实体基数关系存在 [待确认] 时禁止建表/导数，无监督模式下宁可停在 Stage 2 等用户醒来，不可带病推进
+19. **`lark-cli api <method> <path>` 万能透传** —（2026-04-17 联网发现）所有 lark-cli 未封装的飞书 OpenAPI 都可通过 `lark-cli api POST /open-apis/drive/v1/permissions/:token/public` 等直接调用。Stage 5 遇到"lark-cli 不支持"时先查 `lark-cli api --help`，禁止直接宣布"API 不可达"
 
 ## 参考文档
 
