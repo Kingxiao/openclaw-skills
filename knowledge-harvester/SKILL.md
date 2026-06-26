@@ -149,7 +149,11 @@ python3 ~/.openclaw/extensions/ai-skills/knowledge-harvester/scripts/fetch_sourc
 如果原文获取失败导致内容不足以满足上述门槛：
 1. 使用 `web_search` 搜索该主题补充信息
 2. 仍不足则用 `web_fetch` 尝试替代 URL（如 arXiv abs 页面、GitHub README）
-3. 仍不满足质量门槛，则标记为 SKIP（reason: "内容不足"），不生成笔记
+3. 仍不满足质量门槛，则标记为 **SKIP**（reason: "内容不足"），**不生成笔记**——但 harvest.jsonl 中该条目 decision 必须改为 SKIP，**不得保留 PASS 状态**
+
+> **⚠️ P-2026-06-16-02 (2026-06-25 复盘强制落地)**：PASS = 必生成，超预算标 SKIPPED 不保留 PASS。
+> 不允许出现"harvest.jsonl 中 decision=PASS 但没有对应 .md 笔记"的状态。
+> 验证方法：每次 harvest 完成后用 `diff <(jq -r 'select(.decision=="PASS")|.url' harvest.jsonl) <(ls ~/.openclaw/knowledge/notes/*.md | xargs -I{} grep -l {} ...)` 应为空。
 
 **笔记模板**:
 
