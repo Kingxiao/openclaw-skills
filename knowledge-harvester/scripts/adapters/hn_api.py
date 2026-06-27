@@ -28,10 +28,13 @@ class HNApiAdapter:
         hours = config.get("lookback_hours", 24)
         ts_cutoff = int(time.time()) - hours * 3600
 
+        # P-2026-06-27-03 06-27 复盘决策：provisional 修复
+        # HN Algolia 服务端拒绝 numericFilters=points>=X 校验（HTTP 400，已持续 12+ 日）
+        # 改为客户端过滤：拉取 hitsPerPage=MAX_ITEMS 后按 points 阈值过滤
         url = (
             f"https://hn.algolia.com/api/v1/search?"
-            f"tags=story&numericFilters=points>={min_points},"
-            f"created_at_i>={ts_cutoff}&hitsPerPage={MAX_ITEMS}"
+            f"tags=story&numericFilters=created_at_i>={ts_cutoff}"
+            f"&hitsPerPage={MAX_ITEMS}"
         )
 
         resp = http_get(client, url)
@@ -42,8 +45,11 @@ class HNApiAdapter:
         try:
             data = resp.json()
             for hit in data.get("hits", []):
-                link = hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID', '')}"
+                # 客户端按 points 过滤（替代服务端 numericFilters）
                 points = hit.get("points", 0)
+                if points < min_points:
+                    continue
+                link = hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID', '')}"
                 comments = hit.get("num_comments", 0)
 
                 items.append(make_item(
